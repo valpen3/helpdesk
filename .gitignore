@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Секреты и локальные данные
+.env
+*.pem
+*.key
+*.crt
+secrets/
+backups/*
+!backups/.gitkeep
+*.dump
+
+# IDE и ОС
+.idea/
+.vscode/
+.DS_Store
+
+# Результаты нагрузочных тестов
+loadtests/results/
