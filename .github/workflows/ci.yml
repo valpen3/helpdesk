@@ -14,8 +14,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e "libs/common[dev]"
+        run: pip install -e "libs/common[dev]" -e services/ticket
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -q libs/common/tests
+        run: pytest -q libs/common/tests services/ticket/tests
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose.yml
+        run: cp .env.example .env && docker compose config -q
+      - name: Build images
+        run: docker compose build
