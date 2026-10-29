@@ -1,4 +1,4 @@
-# HelpDesk, этап 1 — участник A: ticket-service + PostgreSQL
+# HelpDesk, этап 1 — приложение и инфраструктура
 name: helpdesk
 
 x-logging: &default-logging
@@ -16,6 +16,9 @@ services:
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ENABLE_DOCS: "true"
+    networks:
+      - edge
+      - db-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,6 +34,8 @@ services:
   # ---------------- участник A ----------------
   postgres:
     image: postgres:16-alpine
+    networks:
+      - db-net
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?задайте AUTH_DB_PASSWORD в .env}
@@ -47,5 +52,73 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  gateway:
+    image: nginx:1.28-alpine
+    depends_on:
+      ticket-service:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    restart: unless-stopped
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-data:/data
+    networks:
+      - cache-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:15672:15672"
+    networks:
+      - broker-net
+      - admin-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
 volumes:
   pg_data:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  edge:
+  db-net:
+    internal: true
+  cache-net:
+    internal: true
+  broker-net:
+    internal: true
+  admin-net:
