@@ -131,6 +131,10 @@ docker compose exec rabbitmq rabbitmqctl list_bindings source_name destination_n
 существующей очереди требует отдельной миграции. Не удаляйте том ради обновления
 привязок.
 
+Интерфейс отправителя событий следующего шага B2 описан в
+[`docs/publisher.md`](docs/publisher.md). Модуль пока не подключён к операциям
+и запуску приложения.
+
 ## Nginx / gateway (этап 1)
 
 ```bash
