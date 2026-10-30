@@ -2,11 +2,16 @@
   "vhosts": [{"name": "/"}],
   "users": [
     {"name": "admin", "password_hash": "__ADMIN_PASSWORD_HASH__", "hashing_algorithm": "rabbit_password_hashing_sha256", "tags": "administrator"},
-    {"name": "notif-svc", "password_hash": "__NOTIF_PASSWORD_HASH__", "hashing_algorithm": "rabbit_password_hashing_sha256", "tags": ""}
+    {"name": "notif-svc", "password_hash": "__NOTIF_PASSWORD_HASH__", "hashing_algorithm": "rabbit_password_hashing_sha256", "tags": ""},
+    {"name": "ticket-svc", "password_hash": "__TICKET_PASSWORD_HASH__", "hashing_algorithm": "rabbit_password_hashing_sha256", "tags": ""}
   ],
   "permissions": [
     {"user": "admin", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"},
-    {"user": "notif-svc", "vhost": "/", "configure": "^$", "write": "^$", "read": "^notifications[.]q$"}
+    {"user": "notif-svc", "vhost": "/", "configure": "^$", "write": "^$", "read": "^notifications[.]q$"},
+    {"user": "ticket-svc", "vhost": "/", "configure": "^$", "write": "^helpdesk[.]events$", "read": "^$"}
+  ],
+  "topic_permissions": [
+    {"user": "ticket-svc", "vhost": "/", "exchange": "helpdesk.events", "write": "^ticket[.](created|updated|status_changed|assigned|commented|deleted)$", "read": "^$"}
   ],
   "exchanges": [
     {"name": "helpdesk.events", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}

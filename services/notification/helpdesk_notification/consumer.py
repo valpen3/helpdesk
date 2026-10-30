@@ -1,7 +1,7 @@
 import asyncio
 
 import aio_pika
-from aio_pika.abc import AbstractIncomingMessage, AbstractRobustConnection
+from aio_pika.abc import AbstractIncomingMessage, AbstractRobustChannel, AbstractRobustConnection
 
 from helpdesk_common import get_logger
 from helpdesk_common.events import EventEnvelope, EventType
@@ -16,15 +16,19 @@ class Consumer:
         self.settings = settings
         self.mailer = mailer
         self.connection: AbstractRobustConnection | None = None
+        self.channel: AbstractRobustChannel | None = None
         self.consuming = False
 
     async def check_ready(self) -> None:
         if (
             not self.consuming
             or self.connection is None
+            or self.channel is None
             or not self.connection.connected.is_set()
+            or self.channel.is_closed
         ):
             raise ConnectionError("RabbitMQ consumer is not ready")
+        await self.channel.ready()
 
     async def handle(self, message: AbstractIncomingMessage) -> None:
         try:
@@ -69,7 +73,12 @@ class Consumer:
                     async with asyncio.timeout(self.settings.io_timeout):
                         channel = await connection.channel()
                         await channel.set_qos(prefetch_count=10)
-                        queue = await channel.get_queue(self.settings.mq_queue, ensure=False)
+                        # Passive lookup does not create a queue. Register it with
+                        # RobustChannel so its consumer is restored after reconnect.
+                        queue = await channel.declare_queue(
+                            self.settings.mq_queue, passive=True, robust=True
+                        )
+                        self.channel = channel
                     async with queue.iterator() as messages:
                         self.consuming = True
                         log.info("consumer_started", queue=self.settings.mq_queue)
@@ -80,4 +89,5 @@ class Consumer:
             finally:
                 self.consuming = False
                 self.connection = None
+                self.channel = None
             await asyncio.sleep(self.settings.retry_delay)

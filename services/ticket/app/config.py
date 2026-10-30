@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_user: str | None = None
     redis_password: SecretStr = SecretStr("")
+    mq_host: str = "rabbitmq"
+    mq_port: int = 5672
+    mq_user: str = "ticket-svc"
+    mq_password: SecretStr = SecretStr("")
+    mq_vhost: str = "/"
+    mq_timeout: float = Field(default=5.0, gt=0, le=30)
 
     @property
     def database_url(self) -> URL:
