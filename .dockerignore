@@ -1,0 +1,15 @@
+# Контекст сборки — корень репозитория, поэтому отрезаем всё лишнее
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+.ruff_cache
+.env
+*.pem
+backups
+docs
+loadtests
+infra
+scripts

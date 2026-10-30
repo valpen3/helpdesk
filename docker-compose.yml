@@ -1,0 +1,51 @@
+# HelpDesk, этап 1 — участник A: ticket-service + PostgreSQL
+name: helpdesk
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------- участник A ----------------
+  ticket-service:
+    build:
+      context: .
+      dockerfile: services/ticket/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENABLE_DOCS: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------- участник A ----------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?задайте AUTH_DB_PASSWORD в .env}
+      TICKETS_DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
+      SLA_DB_PASSWORD: ${SLA_DB_PASSWORD:?задайте SLA_DB_PASSWORD в .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  pg_data:
