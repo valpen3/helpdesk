@@ -113,6 +113,13 @@ curl http://localhost/hello  # {"message":"hello from ticket-service"}
 
 При недоступном приложении `/hello` возвращает 502.
 
+## PostgreSQL и миграции (этап 2, участник A)
+
+При `docker compose up -d --build --wait` задача `ticket-migrate` создаёт таблицы
+`tickets` и `comments`, а затем запускается приложение. Для этой задачи статус
+`Exited (0)` означает успех. Подробное объяснение и команды проверки —
+в [docs/ticket-database.md](docs/ticket-database.md).
+
 ## Правила работы
 
 - В `main` напрямую не пушим: только pull request с одобрением второго участника.

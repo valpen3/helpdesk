@@ -19,6 +19,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 app
 COPY --from=builder /opt/venv /opt/venv
+COPY --chown=app:app services/ticket/alembic.ini /home/app/alembic.ini
+COPY --chown=app:app services/ticket/alembic /home/app/alembic
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 USER app
 WORKDIR /home/app

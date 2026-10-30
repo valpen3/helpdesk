@@ -1,4 +1,4 @@
-# HelpDesk, этап 1 — приложение и инфраструктура
+# HelpDesk — приложение, миграции и инфраструктура
 name: helpdesk
 
 x-logging: &default-logging
@@ -10,18 +10,25 @@ x-logging: &default-logging
 services:
   # ---------------- участник A ----------------
   ticket-service:
-    build:
+    build: &ticket-build
       context: .
       dockerfile: services/ticket/Dockerfile
-    environment:
+    environment: &ticket-environment
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ENABLE_DOCS: "true"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: tickets_db
+      DB_USER: tickets_user
+      DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
     networks:
       - edge
       - db-net
     depends_on:
       postgres:
         condition: service_healthy
+      ticket-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
       interval: 10s
@@ -29,6 +36,19 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    logging: *default-logging
+
+  # Одноразовая задача: применить миграции до запуска приложения.
+  ticket-migrate:
+    build: *ticket-build
+    environment: *ticket-environment
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - db-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
     logging: *default-logging
 
   # ---------------- участник A ----------------

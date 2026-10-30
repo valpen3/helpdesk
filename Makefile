@@ -2,7 +2,7 @@ COMPOSE ?= docker compose
 VENV    ?= .venv
 PY      := $(VENV)/bin/python
 
-.PHONY: help venv test lint up down reset logs ps check
+.PHONY: help venv test lint up down reset logs ps check migrate
 
 help: ## показать список команд
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-8s %s\n", $$1, $$2}'
@@ -32,6 +32,9 @@ logs: ## логи: make logs s=ticket-service
 
 ps: ## состояние контейнеров
 	$(COMPOSE) ps
+
+migrate: ## применить миграции tickets_db
+	$(COMPOSE) run --rm --build ticket-migrate
 
 check: ## быстрая проверка стенда (этап 1)
 	@curl -fsS http://localhost/hello && echo
