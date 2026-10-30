@@ -123,6 +123,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in .env}
+      NOTIF_MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -140,6 +141,49 @@ services:
       retries: 6
       start_period: 30s
 
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MQ_HOST: rabbitmq
+      MQ_USER: notif-svc
+      MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    networks:
+      - broker-net
+      - mail-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=12)"]
+      interval: 10s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+
+  mailpit:
+    image: axllent/mailpit:v1.32
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - mail-net
+      - admin-net
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   pg_data:
   redis-data:
@@ -152,5 +196,7 @@ networks:
   cache-net:
     internal: true
   broker-net:
+    internal: true
+  mail-net:
     internal: true
   admin-net:

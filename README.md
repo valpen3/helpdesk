@@ -17,7 +17,8 @@ make lint                 # проверка стиля
 
 ## Redis (первая часть этапа 1)
 
-Compose запускает Nginx, ticket-service, PostgreSQL, Redis и RabbitMQ.
+Compose запускает Nginx, ticket-service, PostgreSQL, Redis, RabbitMQ,
+notification-service и Mailpit.
 Команды выполняются из корня репозитория, в Windows — из Ubuntu с интеграцией
 Docker Desktop. Перед первым запуском создайте `.env` из `.env.example`,
 если файла ещё нет, и задайте свой `RABBITMQ_ADMIN_PASSWORD`. Compose требует
@@ -94,7 +95,8 @@ Healthcheck проверяет доступность узла и запуск �
 вычисляет солёный SHA-256 хеш пароля из `.env` и подставляет его вместо
 `__ADMIN_PASSWORD_HASH__` в копию JSON внутри контейнера. Исходный файл остаётся
 неизменным. Копия доступна только владельцу, процессу RabbitMQ. В определения
-включены администратор и его права; пользователи сервисов добавляются на этапе 3.
+включены администратор и его права, а также `notif-svc`, которому разрешено
+только читать `notifications.q`. Остальные учётки и ограничения добавляются далее.
 Вручную импортировать исходный JSON с маркером хеша не нужно.
 
 | Routing key | notifications.q | sla.q |
@@ -134,6 +136,11 @@ docker compose exec rabbitmq rabbitmqctl list_bindings source_name destination_n
 Интерфейс отправителя событий следующего шага B2 описан в
 [`docs/publisher.md`](docs/publisher.md). Модуль пока не подключён к операциям
 и запуску приложения.
+
+Первая версия notification-service и инструкция проверки письма в Mailpit
+описаны в [`docs/notifications.md`](docs/notifications.md). Для запуска нужен
+также `NOTIF_MQ_PASSWORD` в `.env`; хеш пароля подставляется в definitions
+тем же скриптом, что и для администратора.
 
 ## Nginx / gateway (этап 1)
 
