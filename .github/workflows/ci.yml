@@ -14,11 +14,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e "libs/common[dev]" -e services/ticket
+        run: pip install -e "libs/common[dev]" -e services/ticket -e services/notification
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -q libs/common/tests services/ticket/tests
+        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests
 
   compose:
     runs-on: ubuntu-latest
@@ -28,6 +28,8 @@ jobs:
         run: cp .env.example .env && docker compose config -q
       - name: Build images
         run: docker compose build
+      - name: Start notification stack on a clean broker
+        run: docker compose up -d --wait notification-service
       - name: Apply migrations on an empty database
         run: docker compose up -d --wait ticket-service
       - name: Check migration version and model consistency
