@@ -1,9 +1,10 @@
-"""ticket-service: hello-world и подключение к PostgreSQL."""
+"""ticket-service: API тикетов, hello-world и проверки готовности."""
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.tickets import router as tickets_router
 from app.config import settings
 from app.db import engine, ping_db
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
@@ -29,6 +30,7 @@ app = FastAPI(
 )
 app.add_middleware(RequestIdMiddleware)
 app.include_router(make_health_router({"postgres": ping_db}))
+app.include_router(tickets_router)
 
 
 @app.get("/hello")

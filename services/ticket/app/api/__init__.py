@@ -1,0 +1,1 @@
+"""HTTP-обработчики ticket-service."""
