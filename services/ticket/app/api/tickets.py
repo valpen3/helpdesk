@@ -4,11 +4,12 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import EmailStr
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import TicketCache, get_cache
 from app.db import get_session
 from app.domain.status import ALLOWED_TRANSITIONS
 from app.models import Ticket, TicketPriority, TicketStatus
@@ -22,18 +23,21 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/v1/tickets", tags=["tickets"])
 Session = Annotated[AsyncSession, Depends(get_session)]
+Cache = Annotated[TicketCache, Depends(get_cache)]
 
 
 @router.post("", response_model=TicketResponse, status_code=201)
 async def create_ticket(
     payload: TicketCreate,
     session: Session,
+    cache: Cache,
     x_user_id: Annotated[UUID, Header()],
     x_user_email: Annotated[EmailStr, Header(max_length=320)],
 ) -> TicketResponse:
     ticket = Ticket(**payload.model_dump(), author_id=x_user_id, author_email=str(x_user_email))
     session.add(ticket)
     await session.commit()
+    await cache.invalidate(ticket.id)
     await session.refresh(ticket)
     return TicketResponse.model_validate(ticket)
 
@@ -41,6 +45,8 @@ async def create_ticket(
 @router.get("", response_model=TicketListResponse)
 async def list_tickets(
     session: Session,
+    cache: Cache,
+    response: Response,
     page: Annotated[int, Query(ge=1, le=2**31 - 1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
     status: TicketStatus | None = None,
@@ -49,6 +55,19 @@ async def list_tickets(
     assignee_id: UUID | None = None,
     escalated: bool | None = None,
 ) -> TicketListResponse:
+    params = dict(
+        page=page,
+        size=size,
+        status=status,
+        priority=priority,
+        author_id=author_id,
+        assignee_id=assignee_id,
+        escalated=escalated,
+    )
+    cached, token = await cache.read_list(params)
+    response.headers["X-Cache"] = "HIT" if cached is not None else "MISS"
+    if cached is not None:
+        return cached
     filters = []
     for column, value in (
         (Ticket.status, status),
@@ -67,25 +86,35 @@ async def list_tickets(
         .offset((page - 1) * size)
         .limit(size)
     )
-    return TicketListResponse(
+    result = TicketListResponse(
         items=[TicketResponse.model_validate(ticket) for ticket in tickets],
         total=total or 0,
         page=page,
         size=size,
     )
+    await cache.store_list(params, result, token)
+    return result
 
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
-async def get_ticket(ticket_id: TicketId, session: Session) -> TicketResponse:
+async def get_ticket(
+    ticket_id: TicketId, session: Session, cache: Cache, response: Response
+) -> TicketResponse:
+    cached, token = await cache.read_ticket(ticket_id)
+    response.headers["X-Cache"] = "HIT" if cached is not None else "MISS"
+    if cached is not None:
+        return cached
     ticket = await session.get(Ticket, ticket_id)
     if ticket is None:
-        raise HTTPException(status_code=404, detail="Тикет не найден")
-    return TicketResponse.model_validate(ticket)
+        raise HTTPException(status_code=404, detail="Тикет не найден", headers={"X-Cache": "MISS"})
+    result = TicketResponse.model_validate(ticket)
+    await cache.store_ticket(result, token)
+    return result
 
 
 @router.post("/{ticket_id}/status", response_model=TicketResponse)
 async def change_ticket_status(
-    ticket_id: TicketId, payload: TicketStatusChange, session: Session
+    ticket_id: TicketId, payload: TicketStatusChange, session: Session, cache: Cache
 ) -> TicketResponse:
     ticket = await session.get(Ticket, ticket_id)
     if ticket is None:
@@ -119,4 +148,5 @@ async def change_ticket_status(
     if changed is None:
         raise HTTPException(status_code=409, detail="Тикет уже изменён; перечитайте его")
     await session.commit()
+    await cache.invalidate(ticket_id)
     return TicketResponse.model_validate(changed)

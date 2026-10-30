@@ -34,10 +34,11 @@ jobs:
         run: |
           docker compose exec -T ticket-service alembic current
           docker compose exec -T ticket-service alembic check
-      - name: Test with PostgreSQL
+      - name: Test with PostgreSQL and Redis
         run: |
           docker compose run --rm --no-deps --user root \
             -e RUN_DATABASE_TESTS=1 \
+            -e RUN_CACHE_TESTS=1 \
             -v "$PWD:/workspace:ro" \
             ticket-service sh -c '
               pip install pytest httpx &&
