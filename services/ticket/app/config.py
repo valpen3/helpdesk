@@ -2,7 +2,7 @@
 (в docker compose — из секции environment), имена без учёта регистра:
 LOG_LEVEL → log_level, ENABLE_DOCS → enable_docs."""
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings
 from sqlalchemy import URL
 
@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     db_name: str = "tickets_db"
     db_user: str = "tickets_user"
     db_password: SecretStr = SecretStr("")
+    cache_enabled: bool = True
+    cache_timeout: float = Field(default=0.25, gt=0, le=5)
+    redis_host: str = "redis"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_user: str | None = None
+    redis_password: SecretStr = SecretStr("")
 
     @property
     def database_url(self) -> URL:

@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.tickets import router as tickets_router
+from app.cache import TicketCache, make_redis
 from app.config import settings
 from app.db import engine, ping_db
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
@@ -15,9 +16,13 @@ log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    redis = make_redis(settings) if settings.cache_enabled else None
+    app.state.ticket_cache = TicketCache(redis, timeout=settings.cache_timeout)
     try:
         yield
     finally:
+        if redis is not None:
+            await redis.aclose()
         await engine.dispose()
 
 
