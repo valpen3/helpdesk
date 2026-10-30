@@ -89,6 +89,8 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    entrypoint: ["sh", "/etc/rabbitmq/start.sh"]
+    command: ["rabbitmq-server"]
     hostname: rabbitmq
     restart: unless-stopped
     environment:
@@ -96,13 +98,16 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in .env}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./infra/rabbitmq/start.sh:/etc/rabbitmq/start.sh:ro
     ports:
       - "127.0.0.1:15672:15672"
     networks:
       - broker-net
       - admin-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping && rabbitmq-diagnostics -q check_running"]
       interval: 10s
       timeout: 5s
       retries: 6
