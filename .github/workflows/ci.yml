@@ -36,6 +36,28 @@ jobs:
         run: |
           docker compose exec -T ticket-service alembic current
           docker compose exec -T ticket-service alembic check
+      - name: Check ticket API through gateway
+        run: |
+          docker compose up -d --wait gateway
+          python - <<'PY'
+          import json
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          for path in ('/hello', '/api/v1/tickets?size=1'):
+              request = Request('http://localhost' + path, headers={'X-Request-ID': 'ci-gateway'})
+              with urlopen(request, timeout=15) as response:
+                  assert response.status == 200
+                  assert response.headers['X-Request-ID'] == 'ci-gateway'
+                  json.load(response)
+          for path in ('/health/ready', '/metrics', '/docs', '/api/v1/tickets-extra'):
+              try:
+                  urlopen('http://localhost' + path, timeout=10)
+              except HTTPError as error:
+                  assert error.code == 404, (path, error.code)
+              else:
+                  raise AssertionError(path + ' must not be exposed')
+          PY
       - name: Test with PostgreSQL and Redis
         run: |
           docker compose run --rm --no-deps --user root \
