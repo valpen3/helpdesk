@@ -75,12 +75,61 @@ docker compose exec rabbitmq rabbitmq-diagnostics -q ping
 
 Том `rabbitmq-data` хранит состояние узла в `/var/lib/rabbitmq`, а постоянный
 `hostname: rabbitmq` сохраняет его имя при пересоздании контейнера. Пользователь
-и пароль из переменных окружения создаются только при первой инициализации
-пустого хранилища: изменение `.env` не меняет пароль уже созданного пользователя.
+и пароль администратора задаются через определения при каждом запуске:
+изменение `.env` применяется после пересоздания контейнера RabbitMQ.
 `docker compose down -v` удаляет тома PostgreSQL, Redis и RabbitMQ вместе с данными.
 
-Healthcheck проверяет доступность узла, а не доставку сообщений. Очереди,
-exchange `helpdesk.events` и маршрутизация событий настраиваются на этапе 2.
+Healthcheck проверяет доступность узла и запуск приложения RabbitMQ
+(`ping` и `check_running`), а не доставку сообщений.
+
+### Маршрутизация событий (первый шаг этапа 2)
+
+`infra/rabbitmq/rabbitmq.conf` подключает импорт определений при запуске.
+`infra/rabbitmq/definitions.json` описывает виртуальный хост
+`/`, постоянный topic-exchange `helpdesk.events`, очереди `notifications.q` и
+`sla.q`, а также привязки из `docs/api.md`. Паролей в этих файлах нет.
+
+При импорте определений на пустом узле RabbitMQ не создаёт пользователя из
+`RABBITMQ_DEFAULT_USER` автоматически. Поэтому `start.sh` перед запуском
+вычисляет солёный SHA-256 хеш пароля из `.env` и подставляет его вместо
+`__ADMIN_PASSWORD_HASH__` в копию JSON внутри контейнера. Исходный файл остаётся
+неизменным. Копия доступна только владельцу, процессу RabbitMQ. В определения
+включены администратор и его права; пользователи сервисов добавляются на этапе 3.
+Вручную импортировать исходный JSON с маркером хеша не нужно.
+
+| Routing key | notifications.q | sla.q |
+| --- | --- | --- |
+| `ticket.created` | да | да |
+| `ticket.assigned` | да | да |
+| `ticket.status_changed` | да | да |
+| `ticket.commented` | да | нет |
+| `ticket.updated` | нет | да |
+| `ticket.deleted` | нет | да |
+| `ticket.sla_breached` | да | нет |
+
+Обе очереди пока classic; quorum и кластер добавляются на этапе надёжности.
+`durable: true` сохраняет объявление очереди/exchange, `auto_delete: false`
+не удаляет их при отключении потребителей. Для сохранения сообщений отправитель
+также должен использовать persistent-сообщения и publisher confirms.
+Очередь `ticket.sla.q` добавляется вместе с обработчиком эскалации на этапе 4.
+
+После изменения конфигурации примените её и проверьте объекты:
+
+```bash
+docker compose up -d --force-recreate --wait rabbitmq
+docker compose exec rabbitmq rabbitmqctl list_exchanges name type durable
+docker compose exec rabbitmq rabbitmqctl list_queues name durable messages_ready messages_unacknowledged
+docker compose exec rabbitmq rabbitmqctl list_bindings source_name destination_name routing_key
+```
+
+В веб-консоли проверьте вкладки Exchanges и Queues and Streams. Пока потребителей
+нет, сообщения остаются в очередях. Публикация в exchange сама по себе не
+проверяет формат `EventEnvelope`: валидация будет в Python-коде.
+
+Импорт применяется и к существующему тому без удаления данных. Удалённые из JSON
+объекты автоматически не удаляются из RabbitMQ; несовместимое изменение свойств
+существующей очереди требует отдельной миграции. Не удаляйте том ради обновления
+привязок.
 
 ## Nginx / gateway (этап 1)
 

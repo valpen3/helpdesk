@@ -1,0 +1,28 @@
+{
+  "vhosts": [{"name": "/"}],
+  "users": [
+    {"name": "admin", "password_hash": "__ADMIN_PASSWORD_HASH__", "hashing_algorithm": "rabbit_password_hashing_sha256", "tags": "administrator"}
+  ],
+  "permissions": [
+    {"user": "admin", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"}
+  ],
+  "exchanges": [
+    {"name": "helpdesk.events", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}
+  ],
+  "queues": [
+    {"name": "notifications.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "sla.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
+  ],
+  "bindings": [
+    {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.created", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.assigned", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.status_changed", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.commented", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.sla_breached", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.created", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.assigned", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.status_changed", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.updated", "arguments": {}},
+    {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.deleted", "arguments": {}}
+  ]
+}
