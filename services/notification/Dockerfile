@@ -7,7 +7,10 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install ./libs/common ./services/notification
 
 FROM python:3.12-slim
-RUN useradd --create-home --uid 10002 app
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends netcat-openbsd \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 10002 app
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1
 USER app
