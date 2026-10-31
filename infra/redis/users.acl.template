@@ -1,0 +1,5 @@
+user default off
+user auth-svc on #__AUTH_REDIS_PASSWORD_HASH__ ~auth:* +@all -@dangerous
+user ticket-svc on #__TICKET_REDIS_PASSWORD_HASH__ ~ticket:* ~tickets:* ~stats:* ~rate:* +@all -@dangerous
+user notif-svc on #__NOTIF_REDIS_PASSWORD_HASH__ ~notif:* +@all -@dangerous
+user exporter on #__EXPORTER_REDIS_PASSWORD_HASH__ +info +ping +config|get +client|list
