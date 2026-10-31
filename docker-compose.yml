@@ -16,7 +16,7 @@ services:
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ENABLE_DOCS: "true"
-      DB_HOST: postgres
+      DB_HOST: postgres-db
       DB_PORT: "5432"
       DB_NAME: tickets_db
       DB_USER: tickets_user
@@ -32,10 +32,12 @@ services:
       MQ_VHOST: /
       MQ_TIMEOUT: ${MQ_TIMEOUT:-5}
     networks:
-      - edge
-      - db-net
-      - cache-net
-      - broker-net
+      edge: {}
+      db-net: {}
+      cache-net: {}
+      broker-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.20
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,14 +61,14 @@ services:
   ticket-migrate:
     build: *ticket-build
     environment:
-      DB_HOST: postgres
+      DB_HOST: postgres-db
       DB_PORT: "5432"
       DB_NAME: tickets_db
       DB_USER: tickets_user
       DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
     command: ["alembic", "upgrade", "head"]
     networks:
-      - db-net
+      db-net: {}
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +79,11 @@ services:
   postgres:
     image: postgres:16-alpine
     networks:
-      - db-net
+      db-net:
+        aliases:
+          - postgres-db
+      mon-net:
+        ipv4_address: 10.10.6.30
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?задайте AUTH_DB_PASSWORD в .env}
@@ -105,7 +111,9 @@ services:
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
-      - edge
+      edge: {}
+      mon-net:
+        ipv4_address: 10.10.6.2
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
       interval: 5s
@@ -121,7 +129,9 @@ services:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis-data:/data
     networks:
-      - cache-net
+      cache-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.40
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -148,8 +158,10 @@ services:
     ports:
       - "127.0.0.1:15672:15672"
     networks:
-      - broker-net
-      - admin-net
+      broker-net: {}
+      admin-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.50
     healthcheck:
       test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping && rabbitmq-diagnostics -q check_running"]
       interval: 10s
@@ -169,8 +181,10 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
     networks:
-      - broker-net
-      - mail-net
+      broker-net: {}
+      mail-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.60
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -191,8 +205,10 @@ services:
     ports:
       - "127.0.0.1:8025:8025"
     networks:
-      - mail-net
-      - admin-net
+      mail-net: {}
+      admin-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.70
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 5s
@@ -208,12 +224,35 @@ volumes:
 
 networks:
   edge:
+    ipam:
+      config:
+        - subnet: 10.10.1.0/24
   db-net:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.10.2.0/24
   cache-net:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.10.3.0/24
   broker-net:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.10.4.0/24
   mail-net:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.10.5.0/24
+  mon-net:
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.10.6.0/24
   admin-net:
+    ipam:
+      config:
+        - subnet: 10.10.9.0/24
