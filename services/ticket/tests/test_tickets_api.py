@@ -48,16 +48,16 @@ async def test_create_and_read_committed_ticket(api):
     event = publisher.events[0]
     assert event.event_type == "ticket.created"
     assert event.request_id == "ticket-create-test"
-    assert event.data == {
+    event_data = event.data.copy()
+    published_at = datetime.fromisoformat(event_data.pop("created_at"))
+    assert event_data == {
         "ticket_id": ticket["id"],
         "title": ticket["title"],
         "priority": "medium",
         "author_id": headers["X-User-Id"],
         "author_email": headers["X-User-Email"],
     }
-    assert datetime.fromisoformat(event.data["created_at"]) == datetime.fromisoformat(
-        ticket["created_at"].replace("Z", "+00:00")
-    )
+    assert published_at == datetime.fromisoformat(ticket["created_at"].replace("Z", "+00:00"))
     assert publisher.committed == [True]
 
 
