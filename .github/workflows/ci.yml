@@ -60,7 +60,9 @@ jobs:
           PY
       - name: Test with PostgreSQL and Redis
         run: |
-          docker compose run --rm --no-deps --user root \
+          # The one-off test container must not inherit ticket-service's fixed mon-net IP.
+          docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+            run --rm --no-deps --user root \
             -e RUN_DATABASE_TESTS=1 \
             -e RUN_CACHE_TESTS=1 \
             -v "$PWD:/workspace:ro" \

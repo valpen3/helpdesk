@@ -1,0 +1,10 @@
+# Override only the one-off test container's networks. The long-running
+# ticket-service keeps its fixed monitoring IP; the test runner gets a dynamic
+# address on the service networks and can still reach PostgreSQL and Redis.
+services:
+  ticket-service:
+    networks: !override
+      edge: {}
+      db-net: {}
+      cache-net: {}
+      broker-net: {}
