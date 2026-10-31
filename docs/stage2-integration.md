@@ -1,3 +1,5 @@
+> Current automatic publication behavior and the POST-to-email verification are documented in [ticket-event-publishing.md](ticket-event-publishing.md).
+
 # Интеграция этапа 2 — пункт B4
 
 ## Что соединено

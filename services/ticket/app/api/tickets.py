@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import EmailStr
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache import TicketCache, get_cache
 from app.db import get_session
 from app.domain.status import ALLOWED_TRANSITIONS
+from app.messaging.events import ticket_created_event
+from app.messaging.publisher import EventPublisher, get_publisher
 from app.models import Ticket, TicketPriority, TicketStatus
 from app.schemas import (
     TicketCreate,
@@ -24,6 +26,7 @@ from app.schemas import (
 router = APIRouter(prefix="/api/v1/tickets", tags=["tickets"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Cache = Annotated[TicketCache, Depends(get_cache)]
+Publisher = Annotated[EventPublisher, Depends(get_publisher)]
 
 
 @router.post("", response_model=TicketResponse, status_code=201)
@@ -33,12 +36,17 @@ async def create_ticket(
     cache: Cache,
     x_user_id: Annotated[UUID, Header()],
     x_user_email: Annotated[EmailStr, Header(max_length=320)],
+    request: Request,
+    publisher: Publisher,
 ) -> TicketResponse:
     ticket = Ticket(**payload.model_dump(), author_id=x_user_id, author_email=str(x_user_email))
     session.add(ticket)
     await session.commit()
     await cache.invalidate(ticket.id)
     await session.refresh(ticket)
+    await publisher.publish(
+        ticket_created_event(ticket, getattr(request.state, "request_id", None))
+    )
     return TicketResponse.model_validate(ticket)
 
 

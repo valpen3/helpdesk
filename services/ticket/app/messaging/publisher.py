@@ -5,9 +5,17 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import aio_pika
-from aio_pika.abc import AbstractExchange, AbstractRobustConnection
+from aio_pika.abc import AbstractExchange, AbstractRobustChannel, AbstractRobustConnection
+from fastapi import HTTPException, Request
 
 from helpdesk_common.events import EXCHANGE, EventEnvelope
+
+
+def get_publisher(request: Request) -> "EventPublisher":
+    publisher = getattr(request.app.state, "event_publisher", None)
+    if publisher is None:
+        raise HTTPException(status_code=503, detail="Event publishing service is not ready")
+    return publisher
 
 
 class EventPublishError(RuntimeError):
@@ -15,11 +23,31 @@ class EventPublishError(RuntimeError):
 
 
 class EventPublisher:
-    def __init__(self, exchange: AbstractExchange, *, timeout: float = 5.0):
+    def __init__(
+        self,
+        exchange: AbstractExchange,
+        *,
+        timeout: float = 5.0,
+        connection: AbstractRobustConnection | None = None,
+        channel: AbstractRobustChannel | None = None,
+    ):
         if timeout <= 0:
             raise ValueError("timeout must be positive")
         self._exchange = exchange
         self._timeout = timeout
+        self._connection = connection
+        self._channel = channel
+
+    async def check_ready(self) -> None:
+        if (
+            self._connection is None
+            or self._channel is None
+            or not self._connection.connected.is_set()
+            or self._channel.is_closed
+        ):
+            raise ConnectionError("RabbitMQ publisher is not ready")
+        async with asyncio.timeout(self._timeout):
+            await self._channel.ready()
 
     async def publish(self, event: EventEnvelope) -> None:
         """Вернуть None после confirm; не повторять отправку при ошибке.
@@ -84,7 +112,12 @@ async def open_publisher(
             channel = await connection.channel(publisher_confirms=True, on_return_raises=True)
             # Avoid declaring topology: service accounts will not have configure rights.
             exchange = await channel.get_exchange(EXCHANGE, ensure=False)
-        yield EventPublisher(exchange, timeout=timeout)
+        yield EventPublisher(
+            exchange,
+            timeout=timeout,
+            connection=connection,
+            channel=channel,
+        )
     finally:
         if connection is not None:
             await connection.close()
