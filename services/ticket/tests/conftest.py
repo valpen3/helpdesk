@@ -11,8 +11,8 @@ from sqlalchemy.pool import NullPool
 from app.cache import TicketCache, get_cache
 from app.config import settings
 from app.db import get_session
-from app.messaging.publisher import get_publisher
 from app.main import app
+from app.messaging.publisher import get_publisher
 from app.models import Ticket
 
 

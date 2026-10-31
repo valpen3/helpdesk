@@ -54,8 +54,10 @@ async def test_create_and_read_committed_ticket(api):
         "priority": "medium",
         "author_id": headers["X-User-Id"],
         "author_email": headers["X-User-Email"],
-        "created_at": ticket["created_at"],
     }
+    assert datetime.fromisoformat(event.data["created_at"]) == datetime.fromisoformat(
+        ticket["created_at"].replace("Z", "+00:00")
+    )
     assert publisher.committed == [True]
 
 

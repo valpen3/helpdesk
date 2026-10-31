@@ -6,6 +6,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.messaging.publisher import get_publisher
+
+
+class UnavailablePublisher:
+    async def publish(self, event):
+        raise AssertionError("Invalid requests must not publish events")
+
+
+app.dependency_overrides[get_publisher] = lambda: UnavailablePublisher()
 
 client = TestClient(app)
 headers = {"X-User-Id": str(uuid4()), "X-User-Email": "client@example.com"}
