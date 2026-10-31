@@ -1,6 +1,6 @@
 """ticket-service: API тикетов, hello-world и проверки готовности."""
 
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -8,6 +8,7 @@ from app.api.tickets import router as tickets_router
 from app.cache import TicketCache, make_redis
 from app.config import settings
 from app.db import engine, ping_db
+from app.messaging.publisher import EventPublisher, open_publisher
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
 
 setup_logging(settings.service_name, settings.log_level)
@@ -19,8 +20,22 @@ async def lifespan(app: FastAPI):
     redis = make_redis(settings) if settings.cache_enabled else None
     app.state.ticket_cache = TicketCache(redis, timeout=settings.cache_timeout)
     try:
-        yield
+        async with AsyncExitStack() as stack:
+            publisher = await stack.enter_async_context(
+                open_publisher(
+                    host=settings.mq_host,
+                    port=settings.mq_port,
+                    login=settings.mq_user,
+                    password=settings.mq_password.get_secret_value(),
+                    virtualhost=settings.mq_vhost,
+                    timeout=settings.mq_timeout,
+                )
+            )
+            app.state.event_publisher = publisher
+            yield
     finally:
+        if hasattr(app.state, "event_publisher"):
+            del app.state.event_publisher
         if redis is not None:
             await redis.aclose()
         await engine.dispose()
@@ -34,7 +49,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(RequestIdMiddleware)
-app.include_router(make_health_router({"postgres": ping_db}))
+
+
+async def ping_publisher() -> None:
+    publisher: EventPublisher | None = getattr(app.state, "event_publisher", None)
+    if publisher is None:
+        raise ConnectionError("RabbitMQ publisher is not ready")
+    await publisher.check_ready()
+
+
+app.include_router(make_health_router({"postgres": ping_db, "rabbitmq": ping_publisher}))
 app.include_router(tickets_router)
 
 

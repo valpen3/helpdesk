@@ -1,3 +1,5 @@
+> Current automatic publication behavior and the POST-to-email verification are documented in [ticket-event-publishing.md](ticket-event-publishing.md).
+
 # Интерфейс publisher — этап 2, B2
 
 Предложение интерфейса для ревью участником A. На этом шаге модуль готовится

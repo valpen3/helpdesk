@@ -1,3 +1,5 @@
+> Current automatic publication behavior and the POST-to-email verification are documented in [ticket-event-publishing.md](ticket-event-publishing.md).
+
 # Notification-service и Mailpit — этап 2, B3
 
 Первая версия обрабатывает `ticket.created`: получает событие из

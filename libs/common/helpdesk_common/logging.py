@@ -53,6 +53,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
+        request.state.request_id = request_id
         log = get_logger("access")
         started = time.perf_counter()
         with structlog.contextvars.bound_contextvars(request_id=request_id):

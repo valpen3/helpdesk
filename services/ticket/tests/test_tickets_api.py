@@ -19,7 +19,7 @@ pytestmark = [
 async def create(client, headers, **fields):
     response = await client.post(
         "/api/v1/tickets",
-        headers=headers,
+        headers={**headers, "X-Request-ID": "ticket-create-test"},
         json={"title": "  Не работает VPN  ", "description": "  Нужна помощь  ", **fields},
     )
     assert response.status_code == 201, response.text
@@ -27,7 +27,10 @@ async def create(client, headers, **fields):
 
 
 async def test_create_and_read_committed_ticket(api):
+    from app.main import app
+
     client, headers, sessions = api
+    publisher = app.state.test_publisher
     ticket = await create(client, headers)
     assert ticket["title"] == "Не работает VPN"
     assert ticket["description"] == "Нужна помощь"
@@ -41,6 +44,19 @@ async def test_create_and_read_committed_ticket(api):
     async with sessions() as session:
         saved = await session.get(Ticket, ticket["id"])
         assert saved is not None and saved.title == ticket["title"]
+    assert len(publisher.events) == 1
+    event = publisher.events[0]
+    assert event.event_type == "ticket.created"
+    assert event.request_id == "ticket-create-test"
+    assert event.data == {
+        "ticket_id": ticket["id"],
+        "title": ticket["title"],
+        "priority": "medium",
+        "author_id": headers["X-User-Id"],
+        "author_email": headers["X-User-Email"],
+        "created_at": ticket["created_at"],
+    }
+    assert publisher.committed == [True]
 
 
 async def test_list_pagination_filters_and_stable_sort(api):
