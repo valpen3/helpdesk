@@ -58,6 +58,8 @@ jobs:
               else:
                   raise AssertionError(path + ' must not be exposed')
           PY
+      - name: Check Redis and PostgreSQL access boundaries
+        run: bash scripts/check_data_access.sh
       - name: Test with PostgreSQL and Redis
         run: |
           docker compose run --rm --no-deps --user root \

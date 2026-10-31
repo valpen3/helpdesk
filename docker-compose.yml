@@ -23,6 +23,8 @@ services:
       DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      REDIS_USER: ticket-svc
+      REDIS_PASSWORD: ${TICKET_REDIS_PASSWORD:?Set TICKET_REDIS_PASSWORD in .env}
       CACHE_ENABLED: ${CACHE_ENABLED:-true}
       CACHE_TIMEOUT: ${CACHE_TIMEOUT:-0.25}
       MQ_HOST: rabbitmq
@@ -76,6 +78,7 @@ services:
   # ---------------- участник A ----------------
   postgres:
     image: postgres:16-alpine
+    command: ["postgres", "-c", "hba_file=/var/lib/postgresql/pg_hba.conf"]
     networks:
       - db-net
     environment:
@@ -86,6 +89,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infra/postgres/pg_hba.conf:/var/lib/postgresql/pg_hba.conf:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -115,15 +119,22 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    command: ["sh", "/usr/local/bin/start-redis.sh"]
+    environment:
+      AUTH_REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD:?Set AUTH_REDIS_PASSWORD in .env}
+      TICKET_REDIS_PASSWORD: ${TICKET_REDIS_PASSWORD:?Set TICKET_REDIS_PASSWORD in .env}
+      NOTIF_REDIS_PASSWORD: ${NOTIF_REDIS_PASSWORD:?Set NOTIF_REDIS_PASSWORD in .env}
+      EXPORTER_REDIS_PASSWORD: ${EXPORTER_REDIS_PASSWORD:?Set EXPORTER_REDIS_PASSWORD in .env}
     restart: unless-stopped
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/users.acl.template:/usr/local/etc/redis/users.acl.template:ro
+      - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
       - redis-data:/data
     networks:
       - cache-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$EXPORTER_REDIS_PASSWORD redis-cli --user exporter ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -210,6 +221,9 @@ networks:
   edge:
   db-net:
     internal: true
+    ipam:
+      config:
+        - subnet: 10.10.2.0/24
   cache-net:
     internal: true
   broker-net:
