@@ -1,10 +1,11 @@
 """Shared offline JWT validation and role dependencies for HelpDesk services."""
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Annotated, Callable
+from typing import Any, Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, status
