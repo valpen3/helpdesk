@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate temporary JWT keys for Compose validation
+        run: bash scripts/gen_keys.sh
       - name: Validate docker-compose.yml
         run: cp .env.example .env && docker compose config -q
       - name: Build images
