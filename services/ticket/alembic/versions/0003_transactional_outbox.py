@@ -1,15 +1,15 @@
 """Add the transactional event outbox.
 
-Revision ID: 0002
-Revises: 0001
+Revision ID: 0003
+Revises: 0002
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0002"
-down_revision = "0001"
+revision = "0003"
+down_revision = "0002"
 branch_labels = None
 depends_on = None
 
