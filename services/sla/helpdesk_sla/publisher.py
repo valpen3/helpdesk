@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import aio_pika
 from aio_pika.abc import AbstractExchange, AbstractRobustConnection
 
-from helpdesk_common.events import EventEnvelope, EXCHANGE
+from helpdesk_common.events import EXCHANGE, EventEnvelope
 from helpdesk_sla.config import Settings
 
 

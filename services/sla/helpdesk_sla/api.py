@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -17,7 +17,7 @@ def iso(value: datetime | None) -> str | None:
 
 
 @router.get("/policies")
-async def get_policies(session: AsyncSession = Depends(get_session)) -> list[dict]:
+async def get_policies(session: Annotated[AsyncSession, Depends(get_session)]) -> list[dict]:
     rows = await session.scalars(select(SlaPolicy))
     order = {priority: index for index, priority in enumerate(DEFAULT_POLICIES)}
     return [
@@ -32,7 +32,7 @@ async def get_policies(session: AsyncSession = Depends(get_session)) -> list[dic
 
 @router.get("/tickets/{ticket_id}")
 async def get_ticket_sla(
-    ticket_id: int, session: AsyncSession = Depends(get_session)
+    ticket_id: int, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> dict:
     record = await session.get(SlaRecord, ticket_id)
     if record is None:
@@ -68,12 +68,12 @@ async def get_ticket_sla(
 
 @router.get("/breaches")
 async def get_breaches(
-    from_: datetime | None = Query(default=None, alias="from"),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: datetime | None = None,
     kind: Literal["response", "resolution"] | None = None,
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    session: AsyncSession = Depends(get_session),
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[dict]:
     statement = select(SlaRecord).where(
         (SlaRecord.response_breached.is_(True))
@@ -108,8 +108,8 @@ async def get_breaches(
 
 @router.get("/stats")
 async def get_stats(
-    period: str = Query(default="7d", pattern=r"^[1-9][0-9]{0,2}d$"),
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    period: Annotated[str, Query(pattern=r"^[1-9][0-9]{0,2}d$")] = "7d",
 ) -> dict:
     days = int(period[:-1])
     start = datetime.now(UTC) - timedelta(days=days)
