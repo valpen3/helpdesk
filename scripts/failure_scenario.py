@@ -127,7 +127,7 @@ def main():
 
     def primary_service(address):
         for service in ("redis", "redis-replica-1", "redis-replica-2"):
-            container = run("ps", "-q", service).strip()
+            container = run("ps", "-a", "-q", service).strip()
             info = json.loads(subprocess.check_output(["docker", "inspect", container], text=True))[
                 0
             ]
