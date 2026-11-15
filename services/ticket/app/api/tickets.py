@@ -20,7 +20,7 @@ from app.messaging.events import (
     ticket_status_changed_event,
     ticket_updated_event,
 )
-from app.messaging.publisher import EventPublisher, get_publisher
+from app.messaging.outbox import add_to_outbox
 from app.models import Comment, Ticket, TicketPriority, TicketStatus
 from app.schemas import (
     CommentCreate,
@@ -37,9 +37,6 @@ from app.schemas import (
 router = APIRouter(prefix="/api/v1/tickets", tags=["tickets"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Cache = Annotated[TicketCache, Depends(get_cache)]
-Publisher = Annotated[EventPublisher, Depends(get_publisher)]
-
-
 @router.post("", response_model=TicketResponse, status_code=201)
 async def create_ticket(
     payload: TicketCreate,
@@ -48,16 +45,16 @@ async def create_ticket(
     x_user_id: Annotated[UUID, Header()],
     x_user_email: Annotated[EmailStr, Header(max_length=320)],
     request: Request,
-    publisher: Publisher,
 ) -> TicketResponse:
     ticket = Ticket(**payload.model_dump(), author_id=x_user_id, author_email=str(x_user_email))
     session.add(ticket)
+    await session.flush()
+    add_to_outbox(
+        session, ticket_created_event(ticket, getattr(request.state, "request_id", None))
+    )
     await session.commit()
     await cache.invalidate(ticket.id)
     await session.refresh(ticket)
-    await publisher.publish(
-        ticket_created_event(ticket, getattr(request.state, "request_id", None))
-    )
     return TicketResponse.model_validate(ticket)
 
 
@@ -138,7 +135,6 @@ async def change_ticket_status(
     session: Session,
     cache: Cache,
     request: Request,
-    publisher: Publisher,
     actor_role: Annotated[str, Header(alias="X-User-Role", max_length=20)] = "client",
 ) -> TicketResponse:
     ticket = await session.get(Ticket, ticket_id)
@@ -173,13 +169,14 @@ async def change_ticket_status(
     )
     if changed is None:
         raise HTTPException(status_code=409, detail="Тикет уже изменён; перечитайте его")
-    await session.commit()
-    await cache.invalidate(ticket_id)
-    await publisher.publish(
+    add_to_outbox(
+        session,
         ticket_status_changed_event(
             changed, old_status, actor_role, getattr(request.state, "request_id", None)
-        )
+        ),
     )
+    await session.commit()
+    await cache.invalidate(ticket_id)
     return TicketResponse.model_validate(changed)
 
 
@@ -190,7 +187,6 @@ async def update_ticket(
     session: Session,
     cache: Cache,
     request: Request,
-    publisher: Publisher,
 ) -> TicketResponse:
     changed_fields = sorted(payload.model_fields_set - {"version"})
     if not changed_fields:
@@ -213,11 +209,12 @@ async def update_ticket(
         if exists is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
         raise HTTPException(status_code=409, detail="Ticket changed; reload it and retry")
+    add_to_outbox(
+        session,
+        ticket_updated_event(ticket, changed_fields, getattr(request.state, "request_id", None)),
+    )
     await session.commit()
     await cache.invalidate(ticket_id)
-    await publisher.publish(
-        ticket_updated_event(ticket, changed_fields, getattr(request.state, "request_id", None))
-    )
     return TicketResponse.model_validate(ticket)
 
 
@@ -228,7 +225,6 @@ async def assign_ticket(
     session: Session,
     cache: Cache,
     request: Request,
-    publisher: Publisher,
 ) -> TicketResponse:
     ticket = await session.scalar(
         update(Ticket)
@@ -247,11 +243,11 @@ async def assign_ticket(
         if exists is None:
             raise HTTPException(status_code=404, detail="Ticket not found")
         raise HTTPException(status_code=409, detail="Ticket changed; reload it and retry")
+    add_to_outbox(
+        session, ticket_assigned_event(ticket, getattr(request.state, "request_id", None))
+    )
     await session.commit()
     await cache.invalidate(ticket_id)
-    await publisher.publish(
-        ticket_assigned_event(ticket, getattr(request.state, "request_id", None))
-    )
     return TicketResponse.model_validate(ticket)
 
 
@@ -261,7 +257,6 @@ async def add_comment(
     payload: CommentCreate,
     session: Session,
     request: Request,
-    publisher: Publisher,
     x_user_id: Annotated[UUID, Header()],
     x_user_email: Annotated[EmailStr, Header(max_length=320)],
     actor_role: Annotated[str, Header(alias="X-User-Role", max_length=20)] = "client",
@@ -278,13 +273,15 @@ async def add_comment(
         is_internal=payload.is_internal,
     )
     session.add(comment)
-    await session.commit()
-    await session.refresh(comment)
-    await publisher.publish(
+    await session.flush()
+    add_to_outbox(
+        session,
         ticket_commented_event(
             ticket, comment, actor_role, getattr(request.state, "request_id", None)
-        )
+        ),
     )
+    await session.commit()
+    await session.refresh(comment)
     return CommentResponse.model_validate(comment)
 
 
@@ -294,14 +291,13 @@ async def delete_ticket(
     session: Session,
     cache: Cache,
     request: Request,
-    publisher: Publisher,
 ) -> Response:
     result = await session.execute(delete(Ticket).where(Ticket.id == ticket_id))
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    add_to_outbox(
+        session, ticket_deleted_event(ticket_id, getattr(request.state, "request_id", None))
+    )
     await session.commit()
     await cache.invalidate(ticket_id)
-    await publisher.publish(
-        ticket_deleted_event(ticket_id, getattr(request.state, "request_id", None))
-    )
     return Response(status_code=204)

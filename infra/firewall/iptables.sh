@@ -43,16 +43,19 @@ iptables -w -A "$chain" -s "$prometheus_ip" -d "$mon_cidr" -j ACCEPT
 # Сервисы могут получить от Docker DNS адрес коллеги в mon-net. Разрешаем
 # только пары из рабочей матрицы, чтобы эти адреса не ломали штатные вызовы.
 iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.20 -p tcp --dport 8000 -j ACCEPT
-iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.32 -p tcp --dport 5432 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.60 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.60 -d 10.10.6.70 -p tcp --dport 1025 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.60 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEPT
-iptables -w -A "$chain" -s 10.10.6.80 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.80 -d 10.10.6.32 -p tcp --dport 5432 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.80 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.80 -p tcp --dport 8000 -j ACCEPT
-iptables -w -A "$chain" -s 10.10.6.90 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.90 -d 10.10.6.32 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.31 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.32 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.32 -d 10.10.6.31 -p tcp --dport 5432 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.90 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.90 -p tcp --dport 8000 -j ACCEPT
 iptables -w -A "$chain" -s "$mon_cidr" -d "$mon_cidr" \

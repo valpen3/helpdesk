@@ -7,7 +7,7 @@
 | Сеть | Подсеть | Внутренняя | Подключённые сервисы сейчас |
 | --- | --- | --- | --- |
 | `edge` | `10.10.1.0/24` | нет | `gateway`, `auth-service`, `ticket-service`, `sla-service` |
-| `db-net` | `10.10.2.0/24` | да | `postgres` (`postgres-db` alias), `auth-service`, `auth-migrate`, `ticket-service`, `ticket-migrate`, `sla-service`, `sla-migrate` |
+| `db-net` | `10.10.2.0/24` | да | PostgreSQL primary, replica, `postgres-router` (`postgres-db` alias), `pg-backup`, auth/ticket/SLA services and migrations |
 | `cache-net` | `10.10.3.0/24` | да | `redis`, `auth-service`, `ticket-service`, `notification-service` |
 | `broker-net` | `10.10.4.0/24` | да | `rabbitmq`, `ticket-service`, `notification-service`, `sla-service` |
 | `mail-net` | `10.10.5.0/24` | да | `mailpit`, `notification-service` |
@@ -23,7 +23,9 @@
 | будущий Prometheus | `10.10.6.10` |
 | `gateway` | `10.10.6.2` |
 | `ticket-service` | `10.10.6.20` |
-| `postgres` | `10.10.6.30` |
+| PostgreSQL primary | `10.10.6.30` |
+| PostgreSQL replica | `10.10.6.31` |
+| `postgres-router` | `10.10.6.32` |
 | `redis` | `10.10.6.40` |
 | `rabbitmq` | `10.10.6.50` |
 | `notification-service` | `10.10.6.60` |
@@ -31,7 +33,7 @@
 | `sla-service` | `10.10.6.80` |
 | `auth-service` | `10.10.6.90` |
 
-Эти адреса нужны для проверок и правил firewall. PostgreSQL имеет дополнительное имя `postgres-db`, объявленное только в `db-net`; приложение и миграция используют это имя, чтобы выбирать DB-сегмент, а не мониторинговый адрес. Перед настройкой `pg_hba.conf` участнику A нужно разрешить клиентов из подсети `db-net` (`10.10.2.0/24`) и сверить это решение с Compose.
+Эти адреса нужны для проверок и правил firewall. `postgres-db` — alias внутреннего `postgres-router`, который направляет приложения к текущему primary; сам primary и replica не получают этот alias. Приложения и миграции используют только адрес router внутри `db-net`.
 
 ## Матрица доступа
 

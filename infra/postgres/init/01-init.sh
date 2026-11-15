@@ -6,7 +6,9 @@ set -euo pipefail
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v auth_pw="$AUTH_DB_PASSWORD" \
   -v tickets_pw="$TICKETS_DB_PASSWORD" \
+  -v REPLICATION_PASSWORD="$REPLICATION_PASSWORD" \
   -v sla_pw="$SLA_DB_PASSWORD" <<'EOSQL'
+CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD :'REPLICATION_PASSWORD';
 CREATE ROLE auth_user    LOGIN PASSWORD :'auth_pw';
 CREATE ROLE tickets_user LOGIN PASSWORD :'tickets_pw';
 CREATE ROLE sla_user     LOGIN PASSWORD :'sla_pw';
