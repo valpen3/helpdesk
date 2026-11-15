@@ -169,7 +169,9 @@ def main():
                     incident["recovered_at"] = last["timestamp"]
                     # Keep the failed node stopped until the real alert fires.
                     # Continue recording operations during this observation window.
-                    observe_until(lambda sample: firing_alert(component), timeout=45)
+                    observe_until(
+                        lambda sample, component=component: firing_alert(component), timeout=45
+                    )
                     incident["alert_fired_at"] = time.time()
                     for service in (
                         "auth-service",
