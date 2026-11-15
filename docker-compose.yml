@@ -173,6 +173,8 @@ services:
   gateway:
     image: nginx:1.28-alpine
     depends_on:
+      auth-service:
+        condition: service_healthy
       ticket-service:
         condition: service_healthy
       sla-service:
@@ -261,7 +263,7 @@ services:
       MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
-      MAIL_FROM: ${MAIL_FROM:-helpdesk@helpdesk.local}
+      MAIL_FROM: ${MAIL_FROM:-helpdesk@example.com}
       ONCALL_EMAIL: ${ONCALL_EMAIL:?Set ONCALL_EMAIL in .env}
       ADMIN_NOTIFY_EMAIL: ${ADMIN_NOTIFY_EMAIL:?Set ADMIN_NOTIFY_EMAIL in .env}
       REDIS_HOST: redis

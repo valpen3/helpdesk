@@ -27,6 +27,6 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_user: str = "notif-svc"
     redis_password: SecretStr = SecretStr("")
-    oncall_email: EmailStr = "oncall@helpdesk.local"
-    admin_notify_email: EmailStr = "admin@helpdesk.local"
-    mail_from: EmailStr = "helpdesk@helpdesk.local"
+    oncall_email: EmailStr = "oncall@example.com"
+    admin_notify_email: EmailStr = "admin@example.com"
+    mail_from: EmailStr = "helpdesk@example.com"

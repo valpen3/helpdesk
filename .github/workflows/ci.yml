@@ -65,6 +65,12 @@ jobs:
                   assert error.code == 404, (path, error.code)
               else:
                   raise AssertionError(path + ' must not be exposed')
+          try:
+              urlopen('http://localhost/api/v1/sla/policies', timeout=10)
+          except HTTPError as error:
+              assert error.code == 401, ('/api/v1/sla/policies', error.code)
+          else:
+              raise AssertionError('/api/v1/sla/policies must require authentication')
           PY
       - name: Check Redis and PostgreSQL access boundaries
         run: bash scripts/check_data_access.sh
