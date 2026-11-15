@@ -5,6 +5,7 @@ import os
 from itertools import cycle
 
 import aio_pika
+from aio_pika.connection import make_url
 from aio_pika.robust_connection import RobustConnection
 
 
@@ -39,7 +40,17 @@ def cluster_connection_options() -> dict:
 
 
 async def connect_broker(**kwargs):
-    timeout = kwargs.get("timeout", 5)
-    # aio-pika closes a partially initialized connection if connect is cancelled.
-    async with asyncio.timeout(timeout):
-        return await aio_pika.connect_robust(**{**kwargs, **cluster_connection_options()})
+    options = cluster_connection_options()
+    if not options:
+        return await aio_pika.connect_robust(**kwargs)
+    options.pop("connection_class")
+    timeout = kwargs.pop("timeout", 5)
+    connection = ClusterConnection(make_url(**kwargs), **{**kwargs, **options})
+    try:
+        async with asyncio.timeout(timeout):
+            await connection.connect(timeout=timeout)
+        return connection
+    except BaseException:
+        # Cancel the robust retry task too when startup is cancelled/times out.
+        await connection.close()
+        raise

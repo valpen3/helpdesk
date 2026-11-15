@@ -18,7 +18,7 @@ jobs:
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests scripts/tests
+        run: python -m pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests scripts/tests
 
   compose:
     env:
