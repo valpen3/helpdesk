@@ -29,7 +29,7 @@ services:
       JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
       ACCESS_TOKEN_TTL_MIN: ${ACCESS_TOKEN_TTL_MIN:-15}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@helpdesk.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
     secrets:
       - source: jwt_private
