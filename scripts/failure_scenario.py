@@ -110,11 +110,13 @@ def main():
                 return sample
         raise TimeoutError("Clients did not recover within the measurement deadline")
 
-    def healthy_window(seconds):
+    def healthy_window(seconds, *, not_before=0):
         since = None
 
         def stable(sample):
             nonlocal since
+            if sample["timestamp"] < not_before:
+                return False
             if sample["redis"] and sample["rabbitmq"]:
                 since = sample["timestamp"] if since is None else since
                 return sample["timestamp"] - since >= seconds
@@ -146,6 +148,11 @@ def main():
         last = healthy_window(args.baseline_seconds)
         for cycle in range(args.cycles):
             for component in ("redis", "rabbitmq"):
+                # Preserve samples collected while Docker commands/sleeps ran,
+                # but select the target from the newest available observation.
+                while not messages.empty():
+                    last = messages.get_nowait()
+                    samples.append(last)
                 target = (
                     primary_service(last["redis_primary"])
                     if component == "redis"
@@ -161,7 +168,7 @@ def main():
                 try:
                     run("stop", "--timeout", "1", target)
                     # The original process and original Redis/AMQP objects stay alive.
-                    last = healthy_window(3)
+                    last = healthy_window(3, not_before=time.time())
                     if component == "rabbitmq" and last["rabbitmq_node"] == target:
                         raise AssertionError("AMQP connection did not move to another node")
                     if component == "redis" and primary_service(last["redis_primary"]) == target:
@@ -193,7 +200,7 @@ def main():
                 finally:
                     run("start", target)
                     incident["restored_at"] = time.time()
-                last = healthy_window(args.baseline_seconds)
+                last = healthy_window(args.baseline_seconds, not_before=time.time())
                 # Allow restored Redis replicas to catch up before the next fault.
                 time.sleep(5)
         success = True
