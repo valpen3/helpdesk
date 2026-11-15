@@ -143,7 +143,10 @@ docker compose --profile monitoring ps
 CI проверяет unit-тесты, реальные PostgreSQL/Redis, состав quorum-очередей,
 promtool/amtool и правила alerts, доступность всех scrape targets и четыре отказа.
 В каждом запуске журнал доступен как artifact `ha-failure-results` даже при ошибке.
-Проверенный журнал добавляется в `docs/results/` с SHA измеряемого кода.
+[Проверенный журнал 15.11.2026](results/2026-11-15-ha/README.md) содержит
+исходные samples и SHA измеряемого кода: Redis MTTR 6,694 с, экспериментальный
+MTBF 65,393 с. У RabbitMQ ошибок операций не наблюдалось, поэтому конечные
+MTTR/MTBF по outage не определены; интервалы переключения записаны отдельно.
 
 ## Основания конфигурации
 
