@@ -113,15 +113,10 @@ jobs:
       - name: Annotate auth startup logs
         if: failure()
         run: |
-          summary="$(
-            docker compose logs --no-color --tail=100 auth-service auth-migrate |
-              grep -E -A 2 'Traceback|ERROR|Exception|OperationalError|ConnectionRefused|InvalidPassword|no pg_hba|could not connect|RuntimeError' |
-              tail -n 20 |
-              tr '\n' ';'
-          )"
-          summary=${summary//'%'/'%25'}
-          summary=${summary//$'\r'/'%0D'}
-          printf '::error title=Auth startup summary::%s\n' "$summary"
+          logs="$(docker compose logs --no-color --tail=60 auth-service auth-migrate | tr '\n' ';')"
+          logs=${logs//'%'/'%25'}
+          logs=${logs//$'\r'/'%0D'}
+          printf '::error title=Auth startup log tail::%s\n' "$logs"
       - name: Stop test stack
         if: always()
         run: docker compose down
