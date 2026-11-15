@@ -447,12 +447,13 @@ services:
     command: ["sh", "/usr/local/bin/sentinel.sh"]
     environment:
       REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
-      SENTINEL_HOSTNAME: sentinel-1
+      SENTINEL_ANNOUNCE_IP: 10.10.3.21
     volumes:
       - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
       - sentinel-1-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.21
     depends_on:
       redis:
         condition: service_healthy
@@ -472,12 +473,13 @@ services:
     command: ["sh", "/usr/local/bin/sentinel.sh"]
     environment:
       REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
-      SENTINEL_HOSTNAME: sentinel-2
+      SENTINEL_ANNOUNCE_IP: 10.10.3.22
     volumes:
       - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
       - sentinel-2-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.22
     depends_on:
       redis:
         condition: service_healthy
@@ -497,12 +499,13 @@ services:
     command: ["sh", "/usr/local/bin/sentinel.sh"]
     environment:
       REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
-      SENTINEL_HOSTNAME: sentinel-3
+      SENTINEL_ANNOUNCE_IP: 10.10.3.23
     volumes:
       - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
       - sentinel-3-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.23
     depends_on:
       redis:
         condition: service_healthy
