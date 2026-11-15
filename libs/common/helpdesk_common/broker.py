@@ -45,7 +45,7 @@ async def connect_broker(**kwargs):
         return await aio_pika.connect_robust(**kwargs)
     options.pop("connection_class")
     timeout = kwargs.pop("timeout", 5)
-    connection = ClusterConnection(make_url(**kwargs), **{**kwargs, **options})
+    connection = ClusterConnection(make_url(**{**kwargs, **options}), **{**kwargs, **options})
     try:
         async with asyncio.timeout(timeout):
             await connection.connect(timeout=timeout)

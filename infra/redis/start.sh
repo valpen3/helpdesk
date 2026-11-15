@@ -35,5 +35,5 @@ fi
 sed -i '/^masteruser /d; /^masterauth /d; /^aclfile /d; /^replica-announce-ip /d' "$config"
 printf '\nmasteruser replication\nmasterauth "%s"\naclfile %s\n' \
     "$(quote "$REDIS_REPLICATION_PASSWORD")" "$acl_file" >> "$config"
-printf 'replica-announce-ip %s\n' "${REDIS_NODE_HOSTNAME:?}" >> "$config"
+printf 'replica-announce-ip %s\n' "${REDIS_ANNOUNCE_IP:?}" >> "$config"
 exec redis-server "$config"

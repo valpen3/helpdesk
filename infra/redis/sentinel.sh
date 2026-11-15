@@ -8,9 +8,9 @@ if [ ! -f "$config" ]; then
 port 26379
 bind 0.0.0.0
 dir /data
-sentinel resolve-hostnames yes
-sentinel announce-hostnames yes
-sentinel monitor helpdesk redis 6379 2
+# Docker removes stopped names from DNS. Never block Sentinel's event loop
+# resolving the failed primary: repeated resolver delays can trigger TILT.
+sentinel monitor helpdesk 10.10.3.10 6379 2
 sentinel down-after-milliseconds helpdesk 5000
 sentinel failover-timeout helpdesk 30000
 sentinel parallel-syncs helpdesk 1
@@ -23,6 +23,6 @@ requirepass "$password"
 sentinel auth-user helpdesk sentinel
 sentinel auth-pass helpdesk "$password"
 sentinel sentinel-pass "$password"
-sentinel announce-ip ${SENTINEL_HOSTNAME:?}
+sentinel announce-ip ${SENTINEL_ANNOUNCE_IP:?}
 EOF
 exec redis-server "$config" --sentinel

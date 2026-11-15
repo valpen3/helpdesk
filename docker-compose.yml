@@ -214,7 +214,7 @@ services:
     image: redis:7-alpine
     command: ["sh", "/usr/local/bin/start-redis.sh"]
     environment: &redis-environment
-      REDIS_NODE_HOSTNAME: redis
+      REDIS_ANNOUNCE_IP: 10.10.3.10
       REDIS_REPLICATION_PASSWORD: ${REDIS_REPLICATION_PASSWORD:?Set REDIS_REPLICATION_PASSWORD in .env}
       REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
       AUTH_REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD:?Set AUTH_REDIS_PASSWORD in .env}
@@ -228,7 +228,8 @@ services:
       - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
       - redis-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.10
       mon-net:
         ipv4_address: 10.10.6.40
     healthcheck:
@@ -409,15 +410,16 @@ services:
     <<: *redis-node
     environment:
       <<: *redis-environment
-      REDIS_REPLICA_OF: redis
-      REDIS_NODE_HOSTNAME: redis-replica-1
+      REDIS_REPLICA_OF: 10.10.3.10
+      REDIS_ANNOUNCE_IP: 10.10.3.11
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./infra/redis/users.acl.template:/usr/local/etc/redis/users.acl.template:ro
       - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
       - redis-replica-1-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.11
     depends_on:
       redis:
         condition: service_healthy
@@ -426,15 +428,16 @@ services:
     <<: *redis-node
     environment:
       <<: *redis-environment
-      REDIS_REPLICA_OF: redis
-      REDIS_NODE_HOSTNAME: redis-replica-2
+      REDIS_REPLICA_OF: 10.10.3.10
+      REDIS_ANNOUNCE_IP: 10.10.3.12
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./infra/redis/users.acl.template:/usr/local/etc/redis/users.acl.template:ro
       - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
       - redis-replica-2-data:/data
     networks:
-      cache-net: {}
+      cache-net:
+        ipv4_address: 10.10.3.12
     depends_on:
       redis:
         condition: service_healthy
