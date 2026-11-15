@@ -1,5 +1,6 @@
 """ticket-service: API тикетов, hello-world и проверки готовности."""
 
+import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,7 +9,7 @@ from app.api.tickets import router as tickets_router
 from app.cache import TicketCache, make_redis
 from app.config import settings
 from app.db import engine, ping_db
-from app.messaging.publisher import EventPublisher, open_publisher
+from app.messaging.outbox import run_outbox_worker
 from app.messaging.sla_consumer import open_sla_consumer
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
 from helpdesk_common.metrics import instrument_app
@@ -21,19 +22,9 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI):
     redis = make_redis(settings) if settings.cache_enabled else None
     app.state.ticket_cache = TicketCache(redis, timeout=settings.cache_timeout)
+    outbox_task = asyncio.create_task(run_outbox_worker(), name="ticket-outbox")
     try:
         async with AsyncExitStack() as stack:
-            publisher = await stack.enter_async_context(
-                open_publisher(
-                    host=settings.mq_host,
-                    port=settings.mq_port,
-                    login=settings.mq_user,
-                    password=settings.mq_password.get_secret_value(),
-                    virtualhost=settings.mq_vhost,
-                    timeout=settings.mq_timeout,
-                )
-            )
-            app.state.event_publisher = publisher
             await stack.enter_async_context(
                 open_sla_consumer(
                     host=settings.mq_host,
@@ -48,8 +39,11 @@ async def lifespan(app: FastAPI):
             )
             yield
     finally:
-        if hasattr(app.state, "event_publisher"):
-            del app.state.event_publisher
+        outbox_task.cancel()
+        try:
+            await outbox_task
+        except asyncio.CancelledError:
+            pass
         if redis is not None:
             await redis.aclose()
         await engine.dispose()
@@ -65,14 +59,7 @@ app = FastAPI(
 app.add_middleware(RequestIdMiddleware)
 
 
-async def ping_publisher() -> None:
-    publisher: EventPublisher | None = getattr(app.state, "event_publisher", None)
-    if publisher is None:
-        raise ConnectionError("RabbitMQ publisher is not ready")
-    await publisher.check_ready()
-
-
-app.include_router(make_health_router({"postgres": ping_db, "rabbitmq": ping_publisher}))
+app.include_router(make_health_router({"postgres": ping_db}))
 app.include_router(tickets_router)
 
 

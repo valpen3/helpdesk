@@ -247,7 +247,7 @@ stateDiagram-v2
 
 Конверт каждого события одинаковый: `{event_id: UUID, event_type, occurred_at, producer: "ticket-service", request_id, data}`. Сообщения публикуются как persistent (`delivery_mode=2`) с `message_id = event_id` и publisher confirms.
 
-На этапе задания 3 событие публикуется сразу после `COMMIT`. На этапе надёжности вводится transactional outbox: событие пишется в таблицу `outbox` в той же транзакции, что и тикет, а фоновая задача раз в секунду публикует неотправленные записи. Так событие не теряется, если RabbitMQ лежал в момент записи.
+Событие записывается в таблицу `outbox` в той же транзакции, что и изменение тикета. Фоновый worker раз в секунду публикует неподтверждённые записи и повторяет попытки после сбоя RabbitMQ. После подтверждения запись получает `published_at`; при падении между подтверждением и отметкой событие может быть доставлено повторно, поэтому обработчики используют `event_id` для дедупликации.
 
 **Потребляемые события:** очередь `ticket.sla.q` (ключ `ticket.sla_breached`). При получении сервис ставит `escalated = true`, при `kind = response` повышает приоритет на ступень, пишет history, удаляет `ticket:{id}` и увеличивает версию списков. Повтор того же `event_id` пропускается через таблицу `processed_events`.
 
@@ -374,7 +374,7 @@ LIMIT 100;
 - Один кластер, три базы: `auth_db`, `tickets_db`, `sla_db`. Скрипт `infra/postgres/init/01-init.sql` создаёт пользователей `auth_user`, `tickets_user`, `sla_user`, у каждого права только на свою базу; `REVOKE CONNECT ... FROM PUBLIC` закрывает чужие базы.
 - `pg_hba.conf` пускает каждого пользователя только к своей базе и только с IP своего сервиса: `host tickets_db tickets_user 10.10.2.0/24 scram-sha-256`. Всё остальное `reject`.
 - Миграции Alembic запускаются отдельными одноразовыми контейнерами (`auth-migrate`, `ticket-migrate`, `sla-migrate`), сервисы стартуют после них через `depends_on: condition: service_completed_successfully`. Так несколько реплик не запускают миграции одновременно.
-- Этап надёжности: `postgres-primary` + `postgres-replica` (streaming replication). Реплика при первом старте делает `pg_basebackup -R` с primary. Строка подключения сервисов перечисляет оба хоста: `postgresql+asyncpg://tickets_user:***@postgres-primary:5432,postgres-replica:5432/tickets_db?target_session_attrs=read-write`. После `scripts/failover.sh` (выполняет `pg_ctl promote` на реплике) сервисы при переподключении сами находят новый primary.
+- Этап надёжности: `postgres` primary и `postgres-replica` используют streaming replication; `postgres-router` направляет соединения на primary и переключается на promoted replica. Реплика при первом запуске синхронизируется через `pg_basebackup -R`. `scripts/failover.sh` останавливает старый primary и выполняет `pg_ctl promote` на реплике; старый узел нельзя запускать повторно до пересоздания как реплики.
 - Healthcheck: `pg_isready -U postgres`.
 
 ### Redis 7
@@ -722,9 +722,11 @@ helpdesk/
 ### Этап 5. Задание 5: надёжность (до 3 декабря)
 
 - [ ] **A+B** Написать `docs/reliability.md`: SLI/SLO, целевые MTBF и MTTR по компонентам, RPO/RTO (таблицы из раздела «Надёжность» как основа).
-- [ ] **A** PostgreSQL primary + replica, `replica-entrypoint.sh`, многохостовые строки подключения с `target_session_attrs`, `scripts/failover.sh`.
-- [ ] **A** Контейнер `pg-backup`, `backup.sh` (каждые 6 ч, хранение 7 дней), `scripts/restore.sh`; проверить восстановление на практике.
-- [ ] **A** Transactional outbox в ticket-service и фоновая публикация.
+- [x] **A** PostgreSQL primary + replica, `replica-entrypoint.sh`, маршрутизация через `postgres-router`, `scripts/failover.sh`.
+- [ ] **A** Практически проверить переключение primary и повторное подключение сервисов.
+- [x] **A** Контейнер `pg-backup`, `backup.sh` (каждые 6 ч, хранение 7 дней), `scripts/restore.sh`.
+- [ ] **A** Проверить восстановление из резервной копии на практике и записать результат.
+- [x] **A** Transactional outbox в ticket-service и фоновая публикация.
 - [ ] **B** Redis master + replica + 3 Sentinel, переход клиентов на Sentinel.
 - [ ] **B** Кластер RabbitMQ из 3 узлов, quorum-очереди, `x-delivery-limit`, подключение клиентов к списку узлов.
 - [ ] **B** Prometheus, Grafana, экспортёры; дашборды RED, кэш, очереди, SLO; алерты `up == 0`, рост очереди, ошибки 5xx.
