@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import aio_pika
 from aio_pika.abc import AbstractExchange, AbstractRobustConnection
 
+from helpdesk_common.broker import connect_broker
 from helpdesk_common.events import EXCHANGE, EventEnvelope
 from helpdesk_sla.config import Settings
 
@@ -32,7 +33,7 @@ class SlaPublisher:
 
 @asynccontextmanager
 async def open_publisher(settings: Settings) -> AsyncIterator[SlaPublisher]:
-    connection: AbstractRobustConnection = await aio_pika.connect_robust(
+    connection: AbstractRobustConnection = await connect_broker(
         host=settings.mq_host,
         port=settings.mq_port,
         login=settings.mq_user,

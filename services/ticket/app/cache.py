@@ -17,6 +17,7 @@ from redis.retry import Retry
 from app.config import Settings
 from app.schemas import TicketListResponse, TicketResponse
 from helpdesk_common import get_logger
+from helpdesk_common.redis_client import make_redis_client
 
 log = get_logger(__name__)
 EPOCH_KEY = "tickets:cache_epoch"
@@ -65,7 +66,7 @@ def list_key(params: dict[str, Any], token: CacheToken) -> str:
 
 
 def make_redis(settings: Settings) -> Redis:
-    return Redis(
+    return make_redis_client(
         host=settings.redis_host,
         port=settings.redis_port,
         db=settings.redis_db,

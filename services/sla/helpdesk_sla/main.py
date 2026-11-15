@@ -6,6 +6,7 @@ from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
+from helpdesk_common.metrics import instrument_app
 from helpdesk_sla.api import router as sla_router
 from helpdesk_sla.config import settings
 from helpdesk_sla.consumer import SlaConsumer
@@ -61,3 +62,6 @@ app.include_router(
 @app.get("/metrics", response_class=PlainTextResponse)
 async def metrics() -> PlainTextResponse:
     return PlainTextResponse(generate_latest().decode(), media_type=CONTENT_TYPE_LATEST)
+
+
+instrument_app(app, expose=False)

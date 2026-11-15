@@ -1,6 +1,5 @@
 import asyncio
 
-import aio_pika
 from aio_pika.abc import (
     AbstractIncomingMessage,
     AbstractRobustChannel,
@@ -9,6 +8,7 @@ from aio_pika.abc import (
 from sqlalchemy import select
 
 from helpdesk_common import get_logger
+from helpdesk_common.broker import connect_broker
 from helpdesk_common.events import EventEnvelope, EventType
 from helpdesk_sla.config import Settings
 from helpdesk_sla.db import session_factory
@@ -109,7 +109,7 @@ class SlaConsumer:
         while True:
             try:
                 async with asyncio.timeout(self.settings.mq_timeout):
-                    connection = await aio_pika.connect_robust(
+                    connection = await connect_broker(
                         host=self.settings.mq_host,
                         port=self.settings.mq_port,
                         login=self.settings.mq_user,

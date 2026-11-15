@@ -1,0 +1,73 @@
+groups:
+  - name: helpdesk
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Metrics target {{ $labels.instance }} is unavailable'
+      - alert: ServiceNotReady
+        expr: probe_success{job="readiness"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Readiness failed for {{ $labels.instance }}'
+      - alert: RedisNodeDown
+        expr: redis_up{job="redis"} == 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Redis node {{ $labels.instance }} is down'
+      - alert: RedisReplicationDegraded
+        expr: sum(redis_connected_slaves{job="redis"}) < 2
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis has fewer than two connected replicas
+      - alert: SentinelQuorumAtRisk
+        expr: sum(redis_up{job="sentinel"}) < 3
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: Fewer than three Sentinels are available
+      - alert: RabbitMQQuorumAtRisk
+        expr: sum(up{job="rabbitmq"}) < 3
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: RabbitMQ has lost redundancy; a second failure can stop quorum queues
+      - alert: RabbitMQBacklog
+        expr: sum(rabbitmq_queue_messages_ready) > 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: RabbitMQ backlog exceeds 100 messages
+      - alert: NotificationDeadLetters
+        expr: rabbitmq_queue_messages_ready{queue="notifications.dlq"} > 0
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: Notification dead-letter queue contains messages
+      - alert: HTTPServerErrors
+        expr: sum(rate(http_requests_total{status=~"5.."}[2m])) / clamp_min(sum(rate(http_requests_total[2m])), 0.001) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5 percent of service requests return 5xx
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL exporter cannot reach the database

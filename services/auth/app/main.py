@@ -12,6 +12,7 @@ from app.config import settings
 from app.db import engine, ping_db
 from app.security import validate_key_pair
 from helpdesk_common import RequestIdMiddleware, make_health_router, setup_logging
+from helpdesk_common.metrics import instrument_app
 
 setup_logging(settings.service_name, settings.log_level)
 
@@ -42,3 +43,6 @@ app.include_router(
 )
 app.include_router(auth_router)
 app.include_router(users_router)
+
+
+instrument_app(app)

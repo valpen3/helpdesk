@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "kind": "controlled fault injection, not field reliability",
+  "commit": "3d61a159834c735a112402d04f57b3a34f83fe09",
+  "run_url": "https://github.com/valpen3/helpdesk/actions/runs/43711947380",
+  "incidents": [
+    {
+      "cycle": 1,
+      "component": "redis",
+      "target": "redis",
+      "injected_at": 1794744487.3101404,
+      "recovered_at": 1794744497.3551097,
+      "alert_fired_at": 1794744503.117789,
+      "applications_ready": true,
+      "restored_at": 1794744504.5945282
+    },
+    {
+      "cycle": 1,
+      "component": "rabbitmq",
+      "target": "rabbitmq",
+      "injected_at": 1794744519.8178904,
+      "recovered_at": 1794744524.495808,
+      "alert_fired_at": 1794744538.0423155,
+      "applications_ready": true,
+      "restored_at": 1794744539.568949
+    },
+    {
+      "cycle": 2,
+      "component": "redis",
+      "target": "redis-replica-1",
+      "injected_at": 1794744555.073132,
+      "recovered_at": 1794744565.4981337,
+      "alert_fired_at": 1794744567.9738746,
+      "applications_ready": true,
+      "restored_at": 1794744569.958608
+    },
+    {
+      "cycle": 2,
+      "component": "rabbitmq",
+      "target": "rabbitmq-2",
+      "injected_at": 1794744585.1080713,
+      "recovered_at": 1794744589.7714632,
+      "alert_fired_at": 1794744603.1155138,
+      "applications_ready": true,
+      "restored_at": 1794744605.1471834
+    }
+  ],
+  "metrics": {
+    "redis": {
+      "observed_outages": 2,
+      "uptime_seconds": 130.787,
+      "downtime_seconds": 13.388,
+      "mttr_seconds": 6.694,
+      "mtbf_seconds": 65.393,
+      "censored_outage": false
+    },
+    "rabbitmq": {
+      "observed_outages": 0,
+      "uptime_seconds": 144.174,
+      "downtime_seconds": 0.0,
+      "mttr_seconds": null,
+      "mtbf_seconds": null,
+      "censored_outage": false
+    }
+  }
+}

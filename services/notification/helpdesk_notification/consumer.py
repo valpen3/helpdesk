@@ -10,6 +10,7 @@ from aio_pika.abc import (
 )
 
 from helpdesk_common import get_logger
+from helpdesk_common.broker import connect_broker
 from helpdesk_common.events import EventEnvelope
 from helpdesk_notification.config import Settings
 from helpdesk_notification.idempotency import DeliveryRegistry
@@ -172,7 +173,7 @@ class Consumer:
         while True:
             try:
                 async with asyncio.timeout(self.settings.io_timeout):
-                    connection = await aio_pika.connect_robust(
+                    connection = await connect_broker(
                         host=self.settings.mq_host,
                         port=self.settings.mq_port,
                         login=self.settings.mq_user,

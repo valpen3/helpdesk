@@ -10,10 +10,10 @@ help: ## показать список команд
 venv: ## создать окружение и поставить пакеты для разработки
 	python3.12 -m venv $(VENV)
 	$(PY) -m pip install --upgrade pip
-	$(PY) -m pip install -e "libs/common[dev]" -e services/ticket -e services/sla
+	$(PY) -m pip install -e "libs/common[dev]" -e services/ticket -e services/notification -e services/sla
 
 test: ## запустить тесты
-	$(PY) -m pytest -q libs/common/tests services/ticket/tests services/sla/tests
+	$(PY) -m pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests scripts/tests
 
 lint: ## проверить стиль кода
 	$(PY) -m ruff check .
@@ -41,3 +41,9 @@ check: ## быстрая проверка стенда (этап 1)
 	@$(COMPOSE) exec -T postgres psql -U postgres -tAc "SELECT datname FROM pg_database WHERE datname LIKE '%_db'"
 	@$(COMPOSE) exec -T redis redis-cli ping
 	@$(COMPOSE) exec -T rabbitmq rabbitmq-diagnostics -q ping && echo "rabbitmq ok"
+
+monitoring:
+	$(COMPOSE) --profile monitoring up -d --build
+
+failover:
+	python3 scripts/failure_scenario.py --cycles 2

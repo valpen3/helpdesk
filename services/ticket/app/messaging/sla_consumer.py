@@ -15,6 +15,7 @@ from app.cache import TicketCache
 from app.db import session_factory
 from app.models import ProcessedEvent, Ticket, TicketHistory, TicketPriority
 from helpdesk_common import get_logger
+from helpdesk_common.broker import connect_broker
 from helpdesk_common.events import EventEnvelope, EventType
 
 log = get_logger(__name__)
@@ -127,7 +128,7 @@ async def open_sla_consumer(
             connection: AbstractRobustConnection | None = None
             try:
                 async with asyncio.timeout(timeout):
-                    connection = await aio_pika.connect_robust(
+                    connection = await connect_broker(
                         host=host,
                         port=port,
                         login=login,

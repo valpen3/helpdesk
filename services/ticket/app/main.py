@@ -12,6 +12,7 @@ from app.db import engine, ping_db
 from app.messaging.outbox import run_outbox_worker
 from app.messaging.sla_consumer import open_sla_consumer
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
+from helpdesk_common.metrics import instrument_app
 
 setup_logging(settings.service_name, settings.log_level)
 log = get_logger(__name__)
@@ -66,3 +67,6 @@ app.include_router(tickets_router)
 async def hello() -> dict[str, str]:
     log.info("hello_called")
     return {"message": "hello from ticket-service"}
+
+
+instrument_app(app)

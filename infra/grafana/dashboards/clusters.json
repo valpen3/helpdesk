@@ -1,0 +1,211 @@
+{
+  "uid": "helpdesk-clusters",
+  "title": "HelpDesk - Redis and RabbitMQ",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Redis availability",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redis_up",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Redis connected replicas",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redis_connected_slaves{job=\"redis\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Redis memory bytes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redis_memory_used_bytes{job=\"redis\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Redis hit ratio",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(redis_keyspace_hits_total[2m]) / clamp_min(rate(redis_keyspace_hits_total[2m]) + rate(redis_keyspace_misses_total[2m]), 0.001)",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "RabbitMQ nodes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"rabbitmq\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Queue backlog",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_messages_ready",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Unacknowledged messages",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_messages_unacked",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Queue consumers",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_consumers",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Sentinel availability",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "redis_up{job=\"sentinel\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    }
+  ]
+}

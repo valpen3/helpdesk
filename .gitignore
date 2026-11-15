@@ -27,3 +27,5 @@ backups/*
 
 # Результаты нагрузочных тестов
 loadtests/results/
+
+/artifacts/

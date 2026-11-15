@@ -8,6 +8,7 @@ import aio_pika
 from aio_pika.abc import AbstractExchange, AbstractRobustChannel, AbstractRobustConnection
 from fastapi import HTTPException, Request
 
+from helpdesk_common.broker import connect_broker
 from helpdesk_common.events import EXCHANGE, EventEnvelope
 
 
@@ -99,7 +100,7 @@ async def open_publisher(
     connection: AbstractRobustConnection | None = None
     try:
         async with asyncio.timeout(timeout):
-            connection = await aio_pika.connect_robust(
+            connection = await connect_broker(
                 host=host,
                 port=port,
                 login=login,
