@@ -32,6 +32,7 @@ class SlaRecord(Base):
 
     ticket_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    assignee_email: Mapped[str | None] = mapped_column(String(320))
     priority: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True

@@ -5,6 +5,17 @@ set -eu
 : "${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}"
 : "${TICKET_MQ_PASSWORD:?Set TICKET_MQ_PASSWORD in .env}"
 : "${SLA_MQ_PASSWORD:?Set SLA_MQ_PASSWORD in .env}"
+notification_retry_delay_ms="${NOTIF_RETRY_DELAY_MS:-30000}"
+case "$notification_retry_delay_ms" in
+    ''|*[!0-9]*)
+        echo "NOTIF_RETRY_DELAY_MS must be a positive integer" >&2
+        exit 1
+        ;;
+esac
+if [ "$notification_retry_delay_ms" -lt 1 ] || [ "$notification_retry_delay_ms" -gt 3600000 ]; then
+    echo "NOTIF_RETRY_DELAY_MS must be between 1 and 3600000" >&2
+    exit 1
+fi
 umask 077
 runtime_dir=/tmp/helpdesk-bootstrap
 mkdir -p "$runtime_dir"
@@ -28,6 +39,7 @@ sed -e "s#__ADMIN_PASSWORD_HASH__#$password_hash#g" \
     -e "s#__NOTIF_PASSWORD_HASH__#$notif_password_hash#g" \
     -e "s#__TICKET_PASSWORD_HASH__#$ticket_password_hash#g" \
     -e "s#__SLA_PASSWORD_HASH__#$sla_password_hash#g" \
+    -e "s#\"__NOTIF_RETRY_DELAY_MS__\"#$notification_retry_delay_ms#g" \
     /etc/rabbitmq/definitions.json > "$runtime_dir/definitions.json"
 if [ "$(id -u)" = 0 ]; then
     chown rabbitmq:rabbitmq "$runtime_dir" "$runtime_dir/definitions.json"

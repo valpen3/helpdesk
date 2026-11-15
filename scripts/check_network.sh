@@ -22,6 +22,7 @@ checks=(
   "ALLOW|ticket-service|rabbitmq|5672"
   "ALLOW|notification-service|rabbitmq|5672"
   "ALLOW|notification-service|mailpit|1025"
+  "ALLOW|notification-service|redis|6379"
   "ALLOW|sla-service|postgres-db|5432"
   "ALLOW|sla-service|rabbitmq|5672"
   "DENY|notification-service|10.10.6.20|8000"

@@ -8,21 +8,28 @@
   ],
   "permissions": [
     {"user": "admin", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"},
-    {"user": "notif-svc", "vhost": "/", "configure": "^$", "write": "^$", "read": "^notifications[.]q$"},
+    {"user": "notif-svc", "vhost": "/", "configure": "^$", "write": "^notifications[.](retry|dead)$", "read": "^notifications[.]q$"},
     {"user": "ticket-svc", "vhost": "/", "configure": "^$", "write": "^helpdesk[.]events$", "read": "^ticket[.]sla[.]q$"},
     {"user": "sla-svc", "vhost": "/", "configure": "^$", "write": "^helpdesk[.]events$", "read": "^sla[.]q$"}
   ],
   "topic_permissions": [
+    {"user": "notif-svc", "vhost": "/", "exchange": "notifications.retry", "write": "^ticket[.](created|assigned|status_changed|commented|sla_breached)$", "read": "^$"},
+    {"user": "notif-svc", "vhost": "/", "exchange": "notifications.dead", "write": "^(ticket[.].+|unknown)$", "read": "^$"},
     {"user": "ticket-svc", "vhost": "/", "exchange": "helpdesk.events", "write": "^ticket[.](created|updated|status_changed|assigned|commented|deleted)$", "read": "^$"},
     {"user": "sla-svc", "vhost": "/", "exchange": "helpdesk.events", "write": "^ticket[.]sla_breached$", "read": "^$"}
   ],
   "exchanges": [
-    {"name": "helpdesk.events", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}
+    {"name": "helpdesk.events", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}},
+    {"name": "notifications.retry", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}},
+    {"name": "notifications.retry.return", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}},
+    {"name": "notifications.dead", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "internal": false, "arguments": {}}
   ],
   "queues": [
     {"name": "notifications.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
     {"name": "sla.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
-    {"name": "ticket.sla.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
+    {"name": "ticket.sla.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "notifications.retry.q", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {"x-message-ttl": "__NOTIF_RETRY_DELAY_MS__", "x-dead-letter-exchange": "notifications.retry.return"}},
+    {"name": "notifications.dlq", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
   ],
   "bindings": [
     {"source": "helpdesk.events", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "ticket.created", "arguments": {}},
@@ -35,6 +42,9 @@
     {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.status_changed", "arguments": {}},
     {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.updated", "arguments": {}},
     {"source": "helpdesk.events", "vhost": "/", "destination": "sla.q", "destination_type": "queue", "routing_key": "ticket.deleted", "arguments": {}},
-    {"source": "helpdesk.events", "vhost": "/", "destination": "ticket.sla.q", "destination_type": "queue", "routing_key": "ticket.sla_breached", "arguments": {}}
+    {"source": "helpdesk.events", "vhost": "/", "destination": "ticket.sla.q", "destination_type": "queue", "routing_key": "ticket.sla_breached", "arguments": {}},
+    {"source": "notifications.retry", "vhost": "/", "destination": "notifications.retry.q", "destination_type": "queue", "routing_key": "#", "arguments": {}},
+    {"source": "notifications.retry.return", "vhost": "/", "destination": "notifications.q", "destination_type": "queue", "routing_key": "#", "arguments": {}},
+    {"source": "notifications.dead", "vhost": "/", "destination": "notifications.dlq", "destination_type": "queue", "routing_key": "#", "arguments": {}}
   ]
 }
