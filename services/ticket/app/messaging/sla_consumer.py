@@ -14,7 +14,10 @@ from sqlalchemy.dialects.postgresql import insert
 from app.cache import TicketCache
 from app.db import session_factory
 from app.models import ProcessedEvent, Ticket, TicketHistory, TicketPriority
+from helpdesk_common import get_logger
 from helpdesk_common.events import EventEnvelope, EventType
+
+log = get_logger(__name__)
 
 PRIORITY_ORDER = [
     TicketPriority.LOW,
@@ -117,35 +120,55 @@ async def open_sla_consumer(
     cache: TicketCache,
     timeout: float = 5.0,
 ) -> AsyncIterator[None]:
-    """Start a robust manual-ack consumer using the queue provisioned by infrastructure."""
-    connection: AbstractRobustConnection | None = None
-    consumer_tag: str | None = None
-    queue = None
+    """Retry consumer setup so missing queue ACLs do not stop ticket API startup."""
+
+    async def consume_forever() -> None:
+        while True:
+            connection: AbstractRobustConnection | None = None
+            try:
+                async with asyncio.timeout(timeout):
+                    connection = await aio_pika.connect_robust(
+                        host=host,
+                        port=port,
+                        login=login,
+                        password=password,
+                        virtualhost=virtualhost,
+                        timeout=timeout,
+                        fail_fast="1",
+                        client_properties={"connection_name": "ticket-service-sla-consumer"},
+                    )
+                channel = await connection.channel()
+                await channel.set_qos(prefetch_count=10)
+                queue = await channel.get_queue(queue_name, ensure=False)
+
+                async def handle(message: aio_pika.IncomingMessage) -> None:
+                    async with message.process(requeue=True):
+                        event = EventEnvelope.from_bytes(message.body)
+                        await apply_sla_breach(event, cache)
+
+                await queue.consume(handle, no_ack=False)
+                log.info("sla_consumer_started", queue=queue_name)
+                # The robust connection restores the consumer after a broker reconnect.
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning(
+                    "sla_consumer_unavailable",
+                    queue=queue_name,
+                    error=type(exc).__name__,
+                )
+            finally:
+                if connection is not None:
+                    await connection.close()
+            await asyncio.sleep(5)
+
+    task = asyncio.create_task(consume_forever(), name="ticket-sla-consumer")
     try:
-        async with asyncio.timeout(timeout):
-            connection = await aio_pika.connect_robust(
-                host=host,
-                port=port,
-                login=login,
-                password=password,
-                virtualhost=virtualhost,
-                timeout=timeout,
-                fail_fast="1",
-                client_properties={"connection_name": "ticket-service-sla-consumer"},
-            )
-            channel = await connection.channel()
-            await channel.set_qos(prefetch_count=10)
-            queue = await channel.get_queue(queue_name, ensure=False)
-
-            async def handle(message: aio_pika.IncomingMessage) -> None:
-                async with message.process(requeue=True):
-                    event = EventEnvelope.from_bytes(message.body)
-                    await apply_sla_breach(event, cache)
-
-            consumer_tag = await queue.consume(handle, no_ack=False)
-            yield
+        yield
     finally:
-        if queue is not None and consumer_tag is not None:
-            await queue.cancel(consumer_tag)
-        if connection is not None:
-            await connection.close()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass

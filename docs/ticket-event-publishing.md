@@ -27,7 +27,9 @@ ticket escalated. After commit, the ticket cache is invalidated.
 
 The RabbitMQ queue and `ticket-svc` read permission are provisioned by the
 infrastructure change. The consumer uses passive queue lookup and does not
-declare or modify broker topology.
+declare or modify broker topology. If the queue or permission is not yet
+available, ticket-service keeps serving API requests and retries consumer setup
+every five seconds; event handling starts once the infrastructure is ready.
 
 ## Local end-to-end check
 
