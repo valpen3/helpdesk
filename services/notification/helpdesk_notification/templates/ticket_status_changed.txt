@@ -1,0 +1,1 @@
+Статус заявки #{{ ticket.ticket_id }} «{{ ticket.title }}» изменён на «{{ ticket.new_status }}».

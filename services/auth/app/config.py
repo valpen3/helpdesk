@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     jwt_public_key_path: str = "/run/secrets/jwt_public.pem"
     access_token_ttl_min: int = Field(default=15, ge=1, le=60)
     refresh_token_ttl_days: int = Field(default=7, ge=1, le=90)
-    admin_email: EmailStr = "admin@helpdesk.local"
+    admin_email: EmailStr = "admin@example.com"
     admin_password: SecretStr = SecretStr("")
     login_max_attempts: int = Field(default=5, ge=1, le=20)
     login_lock_seconds: int = Field(default=900, ge=60, le=3600)

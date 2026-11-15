@@ -86,6 +86,9 @@ def apply_ticket_event(
 
     if event.event_type == EventType.TICKET_ASSIGNED:
         record.responded_at = record.responded_at or occurred_at
+        assignee_email = data.get("assignee_email")
+        if assignee_email is not None:
+            record.assignee_email = str(assignee_email)
         return
 
     if event.event_type == EventType.TICKET_STATUS_CHANGED:

@@ -27,6 +27,8 @@ An event uses the common envelope from `libs/common`; its `data` contains
 `ticket_id`, while creation also contains `title`, `priority`, and `created_at`.
 Status changes include `new_status` (or `status`). Priority updates include
 `priority`.
+The latest `assignee_email` is retained on the SLA record so a breach notice can
+also reach the assigned agent.
 
 Each event ID is stored in `processed_events` in the same transaction as the
 corresponding SLA change. The consumer acknowledges the RabbitMQ message only
@@ -41,8 +43,8 @@ if RabbitMQ accepted a message just before a database transaction had to retry.
 
 The event is routed to `notifications.q` and `ticket.sla.q`. RabbitMQ user
 `sla-svc` can read only `sla.q` and publish only the `ticket.sla_breached`
-routing key. The SLA container has no published host port. Its API is not yet
-proxied by Nginx; authentication and gateway routing are added in a later PR.
+routing key. The SLA container has no published host port. Nginx now proxies
+`/api/v1/sla` to it; role checks still depend on A's authentication integration.
 
 ## Internal API and monitoring
 

@@ -115,6 +115,7 @@ async def publish_breach(
             "kind": kind,
             "due_at": due_at.isoformat(),
             "priority": record.priority,
+            "assignee_email": record.assignee_email,
         },
     )
     await publisher.publish(event)

@@ -1,22 +1,36 @@
 import asyncio
+import hashlib
 
 import aio_pika
-from aio_pika.abc import AbstractIncomingMessage, AbstractRobustChannel, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractExchange,
+    AbstractIncomingMessage,
+    AbstractRobustChannel,
+    AbstractRobustConnection,
+)
 
 from helpdesk_common import get_logger
-from helpdesk_common.events import EventEnvelope, EventType
+from helpdesk_common.events import EventEnvelope
 from helpdesk_notification.config import Settings
-from helpdesk_notification.mailer import Mailer, build_message
+from helpdesk_notification.idempotency import DeliveryRegistry
+from helpdesk_notification.mailer import Mailer, build_messages
 
 log = get_logger(__name__)
 
 
+class DeliveryInProgress(RuntimeError):
+    pass
+
+
 class Consumer:
-    def __init__(self, settings: Settings, mailer: Mailer):
+    def __init__(self, settings: Settings, mailer: Mailer, registry: DeliveryRegistry):
         self.settings = settings
         self.mailer = mailer
+        self.registry = registry
         self.connection: AbstractRobustConnection | None = None
         self.channel: AbstractRobustChannel | None = None
+        self.retry_exchange: AbstractExchange | None = None
+        self.dead_exchange: AbstractExchange | None = None
         self.consuming = False
 
     async def check_ready(self) -> None:
@@ -30,30 +44,129 @@ class Consumer:
             raise ConnectionError("RabbitMQ consumer is not ready")
         await self.channel.ready()
 
-    async def handle(self, message: AbstractIncomingMessage) -> None:
+    async def _publish_copy(
+        self,
+        message: AbstractIncomingMessage,
+        exchange: AbstractExchange,
+        *,
+        headers: dict,
+    ) -> None:
+        copy = aio_pika.Message(
+            body=message.body,
+            content_type=message.content_type or "application/json",
+            content_encoding=message.content_encoding,
+            delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            message_id=message.message_id,
+            correlation_id=message.correlation_id,
+            type=message.type,
+            timestamp=message.timestamp,
+            headers=headers,
+        )
+        await exchange.publish(copy, routing_key=message.routing_key or "unknown", mandatory=True)
+
+    async def _dead_letter(self, message: AbstractIncomingMessage, reason: str) -> None:
+        if self.dead_exchange is None:
+            raise ConnectionError("Dead-letter exchange is not ready")
+        headers = dict(message.headers or {})
+        headers["x-dead-letter-reason"] = reason[:200]
+        await self._publish_copy(message, self.dead_exchange, headers=headers)
+        await message.ack()
+        log.error(
+            "notification_dead_lettered",
+            message_id=message.message_id,
+            routing_key=message.routing_key,
+            reason=reason,
+        )
+
+    async def _retry_or_dead_letter(
+        self, message: AbstractIncomingMessage, reason: str
+    ) -> None:
         try:
-            event = EventEnvelope.from_bytes(message.body)
-            log.info("event_received", event_id=str(event.event_id), event_type=event.routing_key)
-            if event.event_type != EventType.TICKET_CREATED:
-                log.warning("notification_not_implemented", event_type=event.routing_key)
-                await message.ack()
-                return
-            mail = build_message(event, self.settings.mail_from)
-        except ValueError as exc:
-            log.warning("invalid_notification_event", reason=type(exc).__name__)
-            await message.reject(requeue=False)
+            headers = dict(message.headers or {})
+            attempts = int(headers.get("x-attempt", 0))
+        except (TypeError, ValueError):
+            await self._dead_letter(message, "invalid_retry_count")
             return
 
+        if attempts < 0:
+            await self._dead_letter(message, "invalid_retry_count")
+            return
+
+        if attempts >= self.settings.max_attempts:
+            await self._dead_letter(message, reason)
+            return
+        if self.retry_exchange is None:
+            raise ConnectionError("Retry exchange is not ready")
+
+        headers["x-attempt"] = attempts + 1
         try:
-            await self.mailer.send(mail)
-        except Exception as exc:
-            log.warning("smtp_send_failed", event_id=str(event.event_id), reason=type(exc).__name__)
-            # MVP backoff. Dedicated retry queues and DLQ are a later stage.
+            await self._publish_copy(message, self.retry_exchange, headers=headers)
+        except Exception:
+            log.exception("notification_retry_publish_failed", message_id=message.message_id)
             await asyncio.sleep(self.settings.retry_delay)
             await message.reject(requeue=True)
             return
         await message.ack()
-        log.info("notification_sent", event_id=str(event.event_id), request_id=event.request_id)
+        log.warning(
+            "notification_retry_scheduled",
+            message_id=message.message_id,
+            attempt=attempts + 1,
+            reason=reason,
+        )
+
+    async def handle(self, message: AbstractIncomingMessage) -> None:
+        try:
+            event = EventEnvelope.from_bytes(message.body)
+            notifications = build_messages(event, self.settings)
+        except ValueError as exc:
+            await self._dead_letter(message, f"invalid_event:{type(exc).__name__}")
+            return
+
+        try:
+            for recipient, mail in notifications:
+                state = await self.registry.claim(str(event.event_id), recipient)
+                if state is None:
+                    log.info(
+                        "notification_duplicate_skipped",
+                        event_id=str(event.event_id),
+                        recipient_ref=hashlib.sha256(
+                            recipient.casefold().encode()
+                        ).hexdigest()[:16],
+                    )
+                    continue
+                if not state:
+                    raise DeliveryInProgress("another worker holds the delivery lock")
+                try:
+                    await self.mailer.send(mail)
+                    await self.registry.mark_sent(str(event.event_id), recipient)
+                except asyncio.CancelledError:
+                    try:
+                        await self.registry.release(str(event.event_id), recipient)
+                    except Exception:
+                        log.warning(
+                            "notification_lock_release_failed",
+                            event_id=str(event.event_id),
+                        )
+                    raise
+                except Exception:
+                    await self.registry.release(str(event.event_id), recipient)
+                    raise
+                log.info(
+                    "notification_sent",
+                    event_id=str(event.event_id),
+                    event_type=event.routing_key,
+                    request_id=event.request_id,
+                    recipient_ref=hashlib.sha256(
+                        recipient.casefold().encode()
+                    ).hexdigest()[:16],
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            await self._retry_or_dead_letter(message, type(exc).__name__)
+            return
+
+        await message.ack()
 
     async def run(self) -> None:
         while True:
@@ -71,12 +184,18 @@ class Consumer:
                 async with connection:
                     self.connection = connection
                     async with asyncio.timeout(self.settings.io_timeout):
-                        channel = await connection.channel()
+                        channel = await connection.channel(
+                            publisher_confirms=True, on_return_raises=True
+                        )
                         await channel.set_qos(prefetch_count=10)
-                        # Passive lookup does not create a queue. Register it with
-                        # RobustChannel so its consumer is restored after reconnect.
                         queue = await channel.declare_queue(
                             self.settings.mq_queue, passive=True, robust=True
+                        )
+                        self.retry_exchange = await channel.get_exchange(
+                            self.settings.retry_exchange, ensure=False
+                        )
+                        self.dead_exchange = await channel.get_exchange(
+                            self.settings.dead_exchange, ensure=False
                         )
                         self.channel = channel
                     async with queue.iterator() as messages:
@@ -90,4 +209,9 @@ class Consumer:
                 self.consuming = False
                 self.connection = None
                 self.channel = None
+                self.retry_exchange = None
+                self.dead_exchange = None
             await asyncio.sleep(self.settings.retry_delay)
+
+
+__all__ = ["Consumer", "DeliveryInProgress"]

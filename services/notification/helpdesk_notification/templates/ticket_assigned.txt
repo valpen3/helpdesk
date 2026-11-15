@@ -1,0 +1,1 @@
+Заявка #{{ ticket.ticket_id }} «{{ ticket.title }}» назначена исполнителю.

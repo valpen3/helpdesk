@@ -29,7 +29,7 @@ services:
       JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
       ACCESS_TOKEN_TTL_MIN: ${ACCESS_TOKEN_TTL_MIN:-15}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@helpdesk.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
     secrets:
       - source: jwt_private
@@ -173,7 +173,11 @@ services:
   gateway:
     image: nginx:1.28-alpine
     depends_on:
+      auth-service:
+        condition: service_healthy
       ticket-service:
+        condition: service_healthy
+      sla-service:
         condition: service_healthy
     restart: unless-stopped
     ports:
@@ -228,6 +232,7 @@ services:
       NOTIF_MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
       TICKET_MQ_PASSWORD: ${TICKET_MQ_PASSWORD:?Set TICKET_MQ_PASSWORD in .env}
       SLA_MQ_PASSWORD: ${SLA_MQ_PASSWORD:?Set SLA_MQ_PASSWORD in .env}
+      NOTIF_RETRY_DELAY_MS: ${NOTIF_RETRY_DELAY_MS:-30000}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -258,9 +263,20 @@ services:
       MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      MAIL_FROM: ${MAIL_FROM:-helpdesk@example.com}
+      ONCALL_EMAIL: ${ONCALL_EMAIL:?Set ONCALL_EMAIL in .env}
+      ADMIN_NOTIFY_EMAIL: ${ADMIN_NOTIFY_EMAIL:?Set ADMIN_NOTIFY_EMAIL in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_USER: notif-svc
+      REDIS_PASSWORD: ${NOTIF_REDIS_PASSWORD:?Set NOTIF_REDIS_PASSWORD in .env}
+      NOTIF_MAX_ATTEMPTS: ${NOTIF_MAX_ATTEMPTS:-3}
+      NOTIF_IDEMPOTENCY_TTL: ${NOTIF_IDEMPOTENCY_TTL:-604800}
+      NOTIF_IDEMPOTENCY_LOCK_TTL: ${NOTIF_IDEMPOTENCY_LOCK_TTL:-300}
     networks:
       broker-net: {}
       mail-net: {}
+      cache-net: {}
       mon-net:
         ipv4_address: 10.10.6.60
     depends_on:
@@ -268,6 +284,8 @@ services:
         condition: service_healthy
         restart: true
       mailpit:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=12)"]
@@ -313,7 +331,12 @@ services:
       MQ_VHOST: /
       SLA_TIME_SCALE: ${SLA_TIME_SCALE:-1}
       SLA_CHECK_INTERVAL: ${SLA_CHECK_INTERVAL:-30}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
+    secrets:
+      - source: jwt_public
+        target: jwt_public.pem
     networks:
+      edge: {}
       db-net: {}
       broker-net: {}
       mon-net:

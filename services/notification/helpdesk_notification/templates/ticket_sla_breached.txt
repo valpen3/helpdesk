@@ -1,0 +1,3 @@
+Нарушен срок {{ breach_label }} по заявке #{{ ticket.ticket_id }} «{{ ticket.title }}».
+Приоритет: {{ ticket.priority }}.
+Срок: {{ ticket.due_at }}.

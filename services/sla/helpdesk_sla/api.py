@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from helpdesk_common import CurrentUser, get_current_user
 from helpdesk_sla.db import get_session
 from helpdesk_sla.domain import DEFAULT_POLICIES
 from helpdesk_sla.models import SlaPolicy, SlaRecord
@@ -17,7 +18,10 @@ def iso(value: datetime | None) -> str | None:
 
 
 @router.get("/policies")
-async def get_policies(session: Annotated[AsyncSession, Depends(get_session)]) -> list[dict]:
+async def get_policies(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> list[dict]:
     rows = await session.scalars(select(SlaPolicy))
     order = {priority: index for index, priority in enumerate(DEFAULT_POLICIES)}
     return [
@@ -32,7 +36,9 @@ async def get_policies(session: Annotated[AsyncSession, Depends(get_session)]) -
 
 @router.get("/tickets/{ticket_id}")
 async def get_ticket_sla(
-    ticket_id: int, session: Annotated[AsyncSession, Depends(get_session)]
+    ticket_id: int,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict:
     record = await session.get(SlaRecord, ticket_id)
     if record is None:
@@ -69,6 +75,7 @@ async def get_ticket_sla(
 @router.get("/breaches")
 async def get_breaches(
     session: Annotated[AsyncSession, Depends(get_session)],
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
     from_: Annotated[datetime | None, Query(alias="from")] = None,
     to: datetime | None = None,
     kind: Literal["response", "resolution"] | None = None,
@@ -109,6 +116,7 @@ async def get_breaches(
 @router.get("/stats")
 async def get_stats(
     session: Annotated[AsyncSession, Depends(get_session)],
+    _current_user: Annotated[CurrentUser, Depends(get_current_user)],
     period: Annotated[str, Query(pattern=r"^[1-9][0-9]{0,2}d$")] = "7d",
 ) -> dict:
     days = int(period[:-1])

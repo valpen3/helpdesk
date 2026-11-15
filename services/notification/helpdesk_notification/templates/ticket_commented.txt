@@ -1,0 +1,1 @@
+К заявке #{{ ticket.ticket_id }} «{{ ticket.title }}» добавлен комментарий.
