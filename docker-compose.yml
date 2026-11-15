@@ -629,6 +629,7 @@ services:
     environment:
       REDIS_ADDR: ""
       REDIS_USER: exporter
+      REDIS_EXPORTER_CONNECTION_TIMEOUT: 1s
       REDIS_PASSWORD: ${EXPORTER_REDIS_PASSWORD:?Set EXPORTER_REDIS_PASSWORD in .env}
     networks:
       cache-net: {}
@@ -641,6 +642,7 @@ services:
     profiles: [monitoring]
     environment:
       REDIS_ADDR: ""
+      REDIS_EXPORTER_CONNECTION_TIMEOUT: 1s
       REDIS_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
     networks:
       cache-net: {}

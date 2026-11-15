@@ -12,6 +12,8 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 COMPOSE = ["docker", "compose", "-f", "docker-compose.yml", "-f", "docker-compose.ci.yml"]
 
@@ -132,6 +134,13 @@ def main():
                 return service
         raise RuntimeError(f"Cannot identify primary {address}")
 
+    def firing_alert(component):
+        name = "RedisNodeDown" if component == "redis" else "RabbitMQQuorumAtRisk"
+        query = f'ALERTS{{alertname="{name}",alertstate="firing"}}'
+        url = "http://localhost:9090/api/v1/query?" + urlencode({"query": query})
+        with urlopen(url, timeout=3) as response:
+            return bool(json.load(response)["data"]["result"])
+
     success = False
     try:
         last = healthy_window(args.baseline_seconds)
@@ -158,6 +167,27 @@ def main():
                     if component == "redis" and primary_service(last["redis_primary"]) == target:
                         raise AssertionError("Sentinel did not elect another primary")
                     incident["recovered_at"] = last["timestamp"]
+                    # Keep the failed node stopped until the real alert fires.
+                    # Continue recording operations during this observation window.
+                    observe_until(lambda sample: firing_alert(component), timeout=45)
+                    incident["alert_fired_at"] = time.time()
+                    for service in (
+                        "auth-service",
+                        "ticket-service",
+                        "sla-service",
+                        "notification-service",
+                    ):
+                        run(
+                            "exec",
+                            "-T",
+                            service,
+                            "python",
+                            "-c",
+                            "from urllib.request import urlopen; "
+                            "assert urlopen('http://127.0.0.1:8000/health/ready', "
+                            "timeout=10).status == 200",
+                        )
+                    incident["applications_ready"] = True
                 finally:
                     run("start", target)
                     incident["restored_at"] = time.time()

@@ -1,10 +1,10 @@
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from aio_pika.robust_connection import RobustConnection
 from yarl import URL
 
-from helpdesk_common.broker import ClusterConnection, cluster_connection_options
+from helpdesk_common.broker import ClusterConnection, cluster_connection_options, connect_broker
 from helpdesk_common.redis_client import make_redis_client
 
 
@@ -52,3 +52,22 @@ def test_cluster_bootstrap_waits_for_other_nodes(monkeypatch):
     assert cluster_connection_options()["fail_fast"] == "0"
     monkeypatch.delenv("MQ_HOSTS")
     assert cluster_connection_options() == {}
+
+
+def test_failed_bootstrap_closes_retry_task_and_sets_heartbeat(monkeypatch):
+    monkeypatch.setenv("MQ_HOSTS", "one,two,three")
+    connection = AsyncMock()
+    connection.connect.side_effect = TimeoutError("all nodes down")
+
+    async def scenario():
+        with patch("helpdesk_common.broker.ClusterConnection", return_value=connection) as factory:
+            try:
+                await connect_broker(host="one", login="user", password="secret", timeout=0.01)
+            except TimeoutError:
+                pass
+            else:
+                raise AssertionError("Unreachable brokers must fail startup")
+        assert factory.call_args.args[0].query["heartbeat"] == "10"
+        connection.close.assert_awaited_once()
+
+    asyncio.run(scenario())

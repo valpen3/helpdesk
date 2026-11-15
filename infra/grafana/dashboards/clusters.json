@@ -1,6 +1,6 @@
 {
   "uid": "helpdesk-clusters",
-  "title": "HelpDesk ? Redis and RabbitMQ",
+  "title": "HelpDesk - Redis and RabbitMQ",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "5s",

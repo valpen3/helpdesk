@@ -1,6 +1,6 @@
 {
   "uid": "helpdesk-overview",
-  "title": "HelpDesk ? service overview",
+  "title": "HelpDesk - service overview",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "5s",
