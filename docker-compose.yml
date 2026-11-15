@@ -9,6 +9,71 @@ x-logging: &default-logging
 
 services:
   # ---------------- участник A ----------------
+  auth-service:
+    build: &auth-build
+      context: .
+      dockerfile: services/auth/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ENABLE_DOCS: "false"
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: auth_db
+      DB_USER: auth_user
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in .env}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_USER: auth-svc
+      REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD:?Set AUTH_REDIS_PASSWORD in .env}
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_private.pem
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
+      ACCESS_TOKEN_TTL_MIN: ${ACCESS_TOKEN_TTL_MIN:-15}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@helpdesk.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    secrets:
+      - source: jwt_private
+        target: jwt_private.pem
+      - source: jwt_public
+        target: jwt_public.pem
+    networks:
+      edge: {}
+      db-net: {}
+      cache-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.90
+    depends_on:
+      auth-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  auth-migrate:
+    build: *auth-build
+    user: "10002:10002"
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: auth_db
+      DB_USER: auth_user
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in .env}
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      db-net: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   ticket-service:
     build: &ticket-build
       context: .
@@ -293,6 +358,12 @@ volumes:
   pg_data:
   redis-data:
   rabbitmq-data:
+
+secrets:
+  jwt_private:
+    file: ./secrets/jwt_private.pem
+  jwt_public:
+    file: ./secrets/jwt_public.pem
 
 networks:
   edge:

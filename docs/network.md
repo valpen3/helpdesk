@@ -6,9 +6,9 @@
 
 | Сеть | Подсеть | Внутренняя | Подключённые сервисы сейчас |
 | --- | --- | --- | --- |
-| `edge` | `10.10.1.0/24` | нет | `gateway`, `ticket-service` |
-| `db-net` | `10.10.2.0/24` | да | `postgres` (`postgres-db` alias), `ticket-service`, `ticket-migrate`, `sla-service`, `sla-migrate` |
-| `cache-net` | `10.10.3.0/24` | да | `redis`, `ticket-service` |
+| `edge` | `10.10.1.0/24` | нет | `gateway`, `auth-service`, `ticket-service` |
+| `db-net` | `10.10.2.0/24` | да | `postgres` (`postgres-db` alias), `auth-service`, `auth-migrate`, `ticket-service`, `ticket-migrate`, `sla-service`, `sla-migrate` |
+| `cache-net` | `10.10.3.0/24` | да | `redis`, `auth-service`, `ticket-service` |
 | `broker-net` | `10.10.4.0/24` | да | `rabbitmq`, `ticket-service`, `notification-service`, `sla-service` |
 | `mail-net` | `10.10.5.0/24` | да | `mailpit`, `notification-service` |
 | `mon-net` | `10.10.6.0/24` | да | все постоянно работающие сервисы; Prometheus будет добавлен на этапе мониторинга |
@@ -29,6 +29,7 @@
 | `notification-service` | `10.10.6.60` |
 | `mailpit` | `10.10.6.70` |
 | `sla-service` | `10.10.6.80` |
+| `auth-service` | `10.10.6.90` |
 
 Эти адреса нужны для проверок и правил firewall. PostgreSQL имеет дополнительное имя `postgres-db`, объявленное только в `db-net`; приложение и миграция используют это имя, чтобы выбирать DB-сегмент, а не мониторинговый адрес. Перед настройкой `pg_hba.conf` участнику A нужно разрешить клиентов из подсети `db-net` (`10.10.2.0/24`) и сверить это решение с Compose.
 
@@ -38,6 +39,9 @@
 | --- | --- | ---: | --- |
 | host / пользователь | `gateway` | 80 | входной HTTP API |
 | `gateway` | `ticket-service` | 8000 | проксирование API |
+| `auth-service` | `postgres-db` | 5432 | Auth database access through `db-net` |
+| `auth-service` | `redis` | 6379 | Login throttling and profile cache |
+| `gateway` | `auth-service` | 8000 | Auth API proxy route (added by B) |
 | `ticket-service` | `postgres-db` | 5432 | база обращений через `db-net` |
 | `ticket-service` | `redis` | 6379 | кэш обращений |
 | `ticket-service` | `rabbitmq` | 5672 | публикация событий |
