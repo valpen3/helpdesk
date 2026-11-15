@@ -77,18 +77,19 @@ jobs:
               else:
                   raise AssertionError(path + ' must not be exposed')
           PY
-      - name: Check SLA authentication through gateway
+      - name: Check authentication through gateway
         run: |
           python - <<'PY'
           from urllib.error import HTTPError
           from urllib.request import urlopen
 
-          try:
-              urlopen('http://localhost/api/v1/sla/policies', timeout=10)
-          except HTTPError as error:
-              assert error.code == 401, ('/api/v1/sla/policies', error.code)
-          else:
-              raise AssertionError('/api/v1/sla/policies must require authentication')
+          for path in ('/api/v1/sla/policies', '/api/v1/users'):
+              try:
+                  urlopen('http://localhost' + path, timeout=10)
+              except HTTPError as error:
+                  assert error.code == 401, (path, error.code)
+              else:
+                  raise AssertionError(path + ' must require authentication')
           PY
       - name: Check Redis and PostgreSQL access boundaries
         run: bash scripts/check_data_access.sh
