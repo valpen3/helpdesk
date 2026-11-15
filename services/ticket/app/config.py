@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     mq_password: SecretStr = SecretStr("")
     mq_vhost: str = "/"
     mq_timeout: float = Field(default=5.0, gt=0, le=30)
+    mq_sla_queue: str = "ticket.sla.q"
 
     @property
     def database_url(self) -> URL:

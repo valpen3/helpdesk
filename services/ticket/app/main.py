@@ -9,6 +9,7 @@ from app.cache import TicketCache, make_redis
 from app.config import settings
 from app.db import engine, ping_db
 from app.messaging.publisher import EventPublisher, open_publisher
+from app.messaging.sla_consumer import open_sla_consumer
 from helpdesk_common import RequestIdMiddleware, get_logger, make_health_router, setup_logging
 
 setup_logging(settings.service_name, settings.log_level)
@@ -32,6 +33,18 @@ async def lifespan(app: FastAPI):
                 )
             )
             app.state.event_publisher = publisher
+            await stack.enter_async_context(
+                open_sla_consumer(
+                    host=settings.mq_host,
+                    port=settings.mq_port,
+                    login=settings.mq_user,
+                    password=settings.mq_password.get_secret_value(),
+                    virtualhost=settings.mq_vhost,
+                    queue_name=settings.mq_sla_queue,
+                    cache=app.state.ticket_cache,
+                    timeout=settings.mq_timeout,
+                )
+            )
             yield
     finally:
         if hasattr(app.state, "event_publisher"):
