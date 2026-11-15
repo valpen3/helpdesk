@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import settings
+from app.db import session_factory
 from app.messaging.publisher import EventPublisher, open_publisher
 from app.models import OutboxEvent
-from app.db import session_factory
-from app.config import settings
 from helpdesk_common import get_logger
 from helpdesk_common.events import EventEnvelope
 

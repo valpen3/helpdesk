@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+
 client = TestClient(app)
 headers = {"X-User-Id": str(uuid4()), "X-User-Email": "client@example.com"}
 
