@@ -33,6 +33,7 @@ services:
       MQ_PASSWORD: ${TICKET_MQ_PASSWORD:?Set TICKET_MQ_PASSWORD in .env}
       MQ_VHOST: /
       MQ_TIMEOUT: ${MQ_TIMEOUT:-5}
+      MQ_SLA_QUEUE: ${MQ_SLA_QUEUE:-ticket.sla.q}
     networks:
       edge: {}
       db-net: {}

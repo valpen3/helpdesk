@@ -6,21 +6,32 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import EmailStr
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TicketCache, get_cache
 from app.db import get_session
 from app.domain.status import ALLOWED_TRANSITIONS
-from app.messaging.events import ticket_created_event
+from app.messaging.events import (
+    ticket_assigned_event,
+    ticket_commented_event,
+    ticket_created_event,
+    ticket_deleted_event,
+    ticket_status_changed_event,
+    ticket_updated_event,
+)
 from app.messaging.publisher import EventPublisher, get_publisher
-from app.models import Ticket, TicketPriority, TicketStatus
+from app.models import Comment, Ticket, TicketPriority, TicketStatus
 from app.schemas import (
+    CommentCreate,
+    CommentResponse,
+    TicketAssignment,
     TicketCreate,
     TicketId,
     TicketListResponse,
     TicketResponse,
     TicketStatusChange,
+    TicketUpdate,
 )
 
 router = APIRouter(prefix="/api/v1/tickets", tags=["tickets"])
@@ -122,7 +133,13 @@ async def get_ticket(
 
 @router.post("/{ticket_id}/status", response_model=TicketResponse)
 async def change_ticket_status(
-    ticket_id: TicketId, payload: TicketStatusChange, session: Session, cache: Cache
+    ticket_id: TicketId,
+    payload: TicketStatusChange,
+    session: Session,
+    cache: Cache,
+    request: Request,
+    publisher: Publisher,
+    actor_role: Annotated[str, Header(alias="X-User-Role", max_length=20)] = "client",
 ) -> TicketResponse:
     ticket = await session.get(Ticket, ticket_id)
     if ticket is None:
@@ -135,6 +152,7 @@ async def change_ticket_status(
             detail=f"переход {ticket.status} → {payload.status} запрещён",
         )
 
+    old_status = ticket.status.value
     now = datetime.now(UTC)
     values = {"status": payload.status, "version": Ticket.version + 1, "updated_at": now}
     if payload.status == TicketStatus.RESOLVED:
@@ -157,4 +175,133 @@ async def change_ticket_status(
         raise HTTPException(status_code=409, detail="Тикет уже изменён; перечитайте его")
     await session.commit()
     await cache.invalidate(ticket_id)
+    await publisher.publish(
+        ticket_status_changed_event(
+            changed, old_status, actor_role, getattr(request.state, "request_id", None)
+        )
+    )
     return TicketResponse.model_validate(changed)
+
+
+@router.patch("/{ticket_id}", response_model=TicketResponse)
+async def update_ticket(
+    ticket_id: TicketId,
+    payload: TicketUpdate,
+    session: Session,
+    cache: Cache,
+    request: Request,
+    publisher: Publisher,
+) -> TicketResponse:
+    changed_fields = sorted(payload.model_fields_set - {"version"})
+    if not changed_fields:
+        raise HTTPException(status_code=422, detail="At least one ticket field must be provided")
+    if any(getattr(payload, name) is None for name in changed_fields):
+        raise HTTPException(status_code=422, detail="Updated fields cannot be null")
+    ticket = await session.scalar(
+        update(Ticket)
+        .where(Ticket.id == ticket_id, Ticket.version == payload.version)
+        .values(
+            **{name: getattr(payload, name) for name in changed_fields},
+            version=Ticket.version + 1,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(Ticket)
+        .execution_options(populate_existing=True, synchronize_session=False)
+    )
+    if ticket is None:
+        exists = await session.get(Ticket, ticket_id)
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        raise HTTPException(status_code=409, detail="Ticket changed; reload it and retry")
+    await session.commit()
+    await cache.invalidate(ticket_id)
+    await publisher.publish(
+        ticket_updated_event(ticket, changed_fields, getattr(request.state, "request_id", None))
+    )
+    return TicketResponse.model_validate(ticket)
+
+
+@router.post("/{ticket_id}/assign", response_model=TicketResponse)
+async def assign_ticket(
+    ticket_id: TicketId,
+    payload: TicketAssignment,
+    session: Session,
+    cache: Cache,
+    request: Request,
+    publisher: Publisher,
+) -> TicketResponse:
+    ticket = await session.scalar(
+        update(Ticket)
+        .where(Ticket.id == ticket_id, Ticket.version == payload.version)
+        .values(
+            assignee_id=payload.assignee_id,
+            assignee_email=str(payload.assignee_email),
+            version=Ticket.version + 1,
+            updated_at=datetime.now(UTC),
+        )
+        .returning(Ticket)
+        .execution_options(populate_existing=True, synchronize_session=False)
+    )
+    if ticket is None:
+        exists = await session.get(Ticket, ticket_id)
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        raise HTTPException(status_code=409, detail="Ticket changed; reload it and retry")
+    await session.commit()
+    await cache.invalidate(ticket_id)
+    await publisher.publish(
+        ticket_assigned_event(ticket, getattr(request.state, "request_id", None))
+    )
+    return TicketResponse.model_validate(ticket)
+
+
+@router.post("/{ticket_id}/comments", response_model=CommentResponse, status_code=201)
+async def add_comment(
+    ticket_id: TicketId,
+    payload: CommentCreate,
+    session: Session,
+    request: Request,
+    publisher: Publisher,
+    x_user_id: Annotated[UUID, Header()],
+    x_user_email: Annotated[EmailStr, Header(max_length=320)],
+    actor_role: Annotated[str, Header(alias="X-User-Role", max_length=20)] = "client",
+) -> CommentResponse:
+    ticket = await session.get(Ticket, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    comment = Comment(
+        ticket_id=ticket_id,
+        author_id=x_user_id,
+        author_email=str(x_user_email),
+        author_role=actor_role,
+        body=payload.body,
+        is_internal=payload.is_internal,
+    )
+    session.add(comment)
+    await session.commit()
+    await session.refresh(comment)
+    await publisher.publish(
+        ticket_commented_event(
+            ticket, comment, actor_role, getattr(request.state, "request_id", None)
+        )
+    )
+    return CommentResponse.model_validate(comment)
+
+
+@router.delete("/{ticket_id}", status_code=204)
+async def delete_ticket(
+    ticket_id: TicketId,
+    session: Session,
+    cache: Cache,
+    request: Request,
+    publisher: Publisher,
+) -> Response:
+    result = await session.execute(delete(Ticket).where(Ticket.id == ticket_id))
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    await session.commit()
+    await cache.invalidate(ticket_id)
+    await publisher.publish(
+        ticket_deleted_event(ticket_id, getattr(request.state, "request_id", None))
+    )
+    return Response(status_code=204)

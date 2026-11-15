@@ -27,6 +27,47 @@ class TicketStatusChange(BaseModel):
     version: Annotated[int, Field(strict=True, ge=1, le=2**31 - 2)]
 
 
+class TicketUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+    ] | None = None
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1)
+    ] | None = None
+    priority: TicketPriority | None = None
+    version: Annotated[int, Field(strict=True, ge=1, le=2**31 - 2)]
+
+
+class TicketAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assignee_id: UUID
+    assignee_email: EmailStr
+    version: Annotated[int, Field(strict=True, ge=1, le=2**31 - 2)]
+
+
+class CommentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+    is_internal: bool = False
+
+
+class CommentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ticket_id: int
+    author_id: UUID
+    author_email: EmailStr
+    author_role: str
+    body: str
+    is_internal: bool
+    created_at: datetime
+
+
 class TicketResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

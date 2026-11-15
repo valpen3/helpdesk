@@ -4,16 +4,32 @@ The ticket service opens one RabbitMQ publisher during FastAPI lifespan. Startup
 fails if the configured broker connection cannot be established. Readiness checks
 both PostgreSQL and the publisher connection.
 
-`POST /api/v1/tickets` commits the ticket first, refreshes its database-generated
-fields, and then publishes a persistent `ticket.created` event with publisher
-confirms. The event follows the shared `EventEnvelope` contract and contains
+Every successful ticket write commits first and then publishes a persistent
+event with publisher confirms. The event follows the shared `EventEnvelope` contract and contains
 `ticket_id`, `title`, `priority`, `author_id`, `author_email`, and `created_at`.
 The originating `X-Request-ID` is copied into the envelope and RabbitMQ
 correlation ID. When no request ID is provided, middleware generates one.
 
-The notification consumer sends the confirmation email for `ticket.created`.
-Status changes do not publish events yet: their contract requires the actor role,
-which the current temporary API does not identify.
+The API supports creation, edits, status changes, assignment, comments, and
+deletion. Each write publishes its matching event after `COMMIT`; failures before
+commit do not publish. Status and comment events carry `X-User-Role` (defaults to
+`client` while the temporary identity headers are in use). `ticket.updated`
+contains a sorted list of changed field names; when priority changes it also
+contains the new `priority` value for SLA recalculation.
+
+The ticket service also consumes `ticket.sla_breached` from the infrastructure
+provisioned queue named by `MQ_SLA_QUEUE` (default `ticket.sla.q`). It records
+the event id in `processed_events` and the applied field changes in
+`ticket_history` in the same PostgreSQL transaction. A repeated event id is
+acknowledged without applying the change again. A response breach raises the
+priority by one level, up to `critical`; a resolution breach only marks the
+ticket escalated. After commit, the ticket cache is invalidated.
+
+The RabbitMQ queue and `ticket-svc` read permission are provisioned by the
+infrastructure change. The consumer uses passive queue lookup and does not
+declare or modify broker topology. If the queue or permission is not yet
+available, ticket-service keeps serving API requests and retries consumer setup
+every five seconds; event handling starts once the infrastructure is ready.
 
 ## Local end-to-end check
 
