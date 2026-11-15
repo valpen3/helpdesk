@@ -5,12 +5,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import (
-    JSON,
     BigInteger,
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -115,10 +116,11 @@ class ProcessedEvent(Base):
 
 class OutboxEvent(Base):
     __tablename__ = "outbox"
+    __table_args__ = (Index("ix_outbox_pending", "published_at", "created_at"),)
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     routing_key: Mapped[str] = mapped_column(String(100))
-    payload: Mapped[dict] = mapped_column(JSON)
+    payload: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"))
