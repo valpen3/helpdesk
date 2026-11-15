@@ -14,11 +14,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e "libs/common[dev]" -e services/ticket -e services/notification
+        run: pip install -e "libs/common[dev]" -e services/ticket -e services/notification -e services/sla
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests
+        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests
 
   compose:
     runs-on: ubuntu-latest
@@ -32,6 +32,12 @@ jobs:
         run: docker compose up -d --wait notification-service
       - name: Apply migrations on an empty database
         run: docker compose up -d --wait ticket-service
+      - name: Start SLA service and apply its migration
+        run: docker compose up -d --wait sla-service
+      - name: Check SLA migration version and model consistency
+        run: |
+          docker compose exec -T sla-service alembic current
+          docker compose exec -T sla-service alembic check
       - name: Check migration version and model consistency
         run: |
           docker compose exec -T ticket-service alembic current

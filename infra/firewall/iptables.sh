@@ -48,6 +48,9 @@ iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEP
 iptables -w -A "$chain" -s 10.10.6.20 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.60 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.60 -d 10.10.6.70 -p tcp --dport 1025 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.80 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.80 -d 10.10.6.50 -p tcp --dport 5672 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.80 -p tcp --dport 8000 -j ACCEPT
 iptables -w -A "$chain" -s "$mon_cidr" -d "$mon_cidr" \
   -m limit --limit 5/min --limit-burst 10 \
   -j LOG --log-prefix "HELPDESK-MON-DROP " --log-level 4

@@ -10,10 +10,10 @@ help: ## показать список команд
 venv: ## создать окружение и поставить пакеты для разработки
 	python3.12 -m venv $(VENV)
 	$(PY) -m pip install --upgrade pip
-	$(PY) -m pip install -e "libs/common[dev]" -e services/ticket
+	$(PY) -m pip install -e "libs/common[dev]" -e services/ticket -e services/sla
 
 test: ## запустить тесты
-	$(PY) -m pytest -q libs/common/tests services/ticket/tests
+	$(PY) -m pytest -q libs/common/tests services/ticket/tests services/sla/tests
 
 lint: ## проверить стиль кода
 	$(PY) -m ruff check .

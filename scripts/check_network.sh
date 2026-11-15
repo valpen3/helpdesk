@@ -22,9 +22,14 @@ checks=(
   "ALLOW|ticket-service|rabbitmq|5672"
   "ALLOW|notification-service|rabbitmq|5672"
   "ALLOW|notification-service|mailpit|1025"
+  "ALLOW|sla-service|postgres-db|5432"
+  "ALLOW|sla-service|rabbitmq|5672"
   "DENY|notification-service|10.10.6.20|8000"
   "DENY|notification-service|10.10.6.30|5432"
   "DENY|ticket-service|10.10.6.70|1025"
+  "DENY|notification-service|10.10.6.80|8000"
+  "DENY|sla-service|10.10.6.40|6379"
+  "DENY|sla-service|10.10.6.70|1025"
 )
 
 failed=0
@@ -65,6 +70,14 @@ if docker compose exec -T gateway wget -q -T 3 -O /dev/null \
   echo "OK ALLOW gateway -> ticket-service:8000"
 else
   echo "FAIL expected ALLOW: gateway -> ticket-service:8000"
+  failed=1
+fi
+
+if docker compose exec -T gateway wget -q -T 3 -O /dev/null \
+  http://sla-service:8000/health/live >/dev/null 2>&1; then
+  echo "OK ALLOW gateway -> sla-service:8000"
+else
+  echo "FAIL expected ALLOW: gateway -> sla-service:8000"
   failed=1
 fi
 

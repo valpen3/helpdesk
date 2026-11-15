@@ -7,9 +7,9 @@
 | Сеть | Подсеть | Внутренняя | Подключённые сервисы сейчас |
 | --- | --- | --- | --- |
 | `edge` | `10.10.1.0/24` | нет | `gateway`, `ticket-service` |
-| `db-net` | `10.10.2.0/24` | да | `postgres` (`postgres-db` alias), `ticket-service`, `ticket-migrate` |
+| `db-net` | `10.10.2.0/24` | да | `postgres` (`postgres-db` alias), `ticket-service`, `ticket-migrate`, `sla-service`, `sla-migrate` |
 | `cache-net` | `10.10.3.0/24` | да | `redis`, `ticket-service` |
-| `broker-net` | `10.10.4.0/24` | да | `rabbitmq`, `ticket-service`, `notification-service` |
+| `broker-net` | `10.10.4.0/24` | да | `rabbitmq`, `ticket-service`, `notification-service`, `sla-service` |
 | `mail-net` | `10.10.5.0/24` | да | `mailpit`, `notification-service` |
 | `mon-net` | `10.10.6.0/24` | да | все постоянно работающие сервисы; Prometheus будет добавлен на этапе мониторинга |
 | `admin-net` | `10.10.9.0/24` | нет | `rabbitmq`, `mailpit` |
@@ -28,6 +28,7 @@
 | `rabbitmq` | `10.10.6.50` |
 | `notification-service` | `10.10.6.60` |
 | `mailpit` | `10.10.6.70` |
+| `sla-service` | `10.10.6.80` |
 
 Эти адреса нужны для проверок и правил firewall. PostgreSQL имеет дополнительное имя `postgres-db`, объявленное только в `db-net`; приложение и миграция используют это имя, чтобы выбирать DB-сегмент, а не мониторинговый адрес. Перед настройкой `pg_hba.conf` участнику A нужно разрешить клиентов из подсети `db-net` (`10.10.2.0/24`) и сверить это решение с Compose.
 
@@ -42,6 +43,9 @@
 | `ticket-service` | `rabbitmq` | 5672 | публикация событий |
 | `notification-service` | `rabbitmq` | 5672 | чтение событий |
 | `notification-service` | `mailpit` | 1025 | отправка писем в тестовый SMTP |
+| `sla-service` | `postgres-db` | 5432 | хранение SLA-сроков и обработанных событий |
+| `sla-service` | `rabbitmq` | 5672 | чтение событий заявок и публикация нарушений SLA |
+| `gateway` | `sla-service` | 8000 | внутренний HTTP API; маршрут будет добавлен после настройки авторизации |
 | Prometheus (этап 5) | сервисы в `mon-net` | метрики | сбор метрик; доступ будет открыт отдельной учётной записи/IP |
 
 Запрещённые проверки: `notification-service` не должен соединяться с `ticket-service` (`10.10.6.20:8000`) или `postgres` (`10.10.6.30:5432`); `ticket-service` не должен соединяться с `mailpit` (`10.10.6.70:1025`). Сервисы не должны использовать общую сеть мониторинга как обход своих рабочих сегментов.

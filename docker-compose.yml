@@ -161,6 +161,7 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in .env}
       NOTIF_MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
       TICKET_MQ_PASSWORD: ${TICKET_MQ_PASSWORD:?Set TICKET_MQ_PASSWORD in .env}
+      SLA_MQ_PASSWORD: ${SLA_MQ_PASSWORD:?Set SLA_MQ_PASSWORD in .env}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -226,6 +227,65 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
+
+  sla-service:
+    build:
+      context: .
+      dockerfile: services/sla/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: sla_db
+      DB_USER: sla_user
+      DB_PASSWORD: ${SLA_DB_PASSWORD:?Set SLA_DB_PASSWORD in .env}
+      MQ_HOST: rabbitmq
+      MQ_PORT: "5672"
+      MQ_USER: sla-svc
+      MQ_PASSWORD: ${SLA_MQ_PASSWORD:?Set SLA_MQ_PASSWORD in .env}
+      MQ_VHOST: /
+      SLA_TIME_SCALE: ${SLA_TIME_SCALE:-1}
+      SLA_CHECK_INTERVAL: ${SLA_CHECK_INTERVAL:-30}
+    networks:
+      db-net: {}
+      broker-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.80
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sla-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=8)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    logging: *default-logging
+
+  sla-migrate:
+    build:
+      context: .
+      dockerfile: services/sla/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DB_HOST: postgres-db
+      DB_PORT: "5432"
+      DB_NAME: sla_db
+      DB_USER: sla_user
+      DB_PASSWORD: ${SLA_DB_PASSWORD:?Set SLA_DB_PASSWORD in .env}
+    networks:
+      db-net: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
     logging: *default-logging
 
 volumes:
