@@ -1,10 +1,10 @@
 > Current automatic publication behavior and the POST-to-email verification are documented in [ticket-event-publishing.md](ticket-event-publishing.md).
 
-# Интерфейс publisher — этап 2, B2
+# Интерфейс publisher
 
-Предложение интерфейса для ревью участником A. На этом шаге модуль готовится
-отдельно: HTTP-операции, FastAPI lifespan, настройки сервиса и Compose пока
-не подключают publisher. Интеграция выполняется отдельным PR в пункте 4.
+Publisher вызывается фоновым outbox worker. HTTP-операция добавляет конверт
+события в `outbox` в той же транзакции, что и бизнес-изменение; напрямую из
+обработчика запроса publisher не вызывается.
 
 ## Вызов из бизнес-операции
 
@@ -14,7 +14,7 @@ from helpdesk_common.events import EventEnvelope, EventType
 
 
 async def publish_created(publisher: EventPublisher, ticket, request_id: str):
-    # Вызывающий код уже выполнил await session.commit().
+    # Пример формата. В приложении событие сначала записывается в outbox.
     event = EventEnvelope(
         event_type=EventType.TICKET_CREATED,
         producer="ticket-service",
@@ -49,8 +49,8 @@ publisher не извлекает данные из БД и не дополня�
 
 `open_publisher(host=..., login=..., password=..., port=5672, virtualhost="/",
 timeout=5.0)` — асинхронный контекстный менеджер. На этапе интеграции его нужно
-открыть один раз в lifespan, сохранить publisher в `app.state`, использовать
-во всех операциях и закрыть при остановке приложения.
+открыть в фоновой задаче lifespan, повторять подключение после сбоя и закрыть
+при остановке приложения. HTTP-операции хранят события в outbox.
 
 ```python
 async with open_publisher(host=host, login=login, password=password) as publisher:
@@ -80,9 +80,9 @@ Publisher не повторяет отправку автоматически. �
 
 Успешный confirm означает принятие брокером, а не обработку потребителем.
 Ошибка публикации после COMMIT не откатывает запись тикета. Вызывающий код
-должен определить ответ HTTP и журналирование ошибки; не следует сообщать, что
-тикет не создан, если транзакция уже завершилась. Атомарность записи и события
-будет решаться через transactional outbox на этапе надёжности.
+не влияет на уже сохранённый тикет: событие остаётся в outbox для повтора.
+Если confirm прошёл, а отметка `published_at` не сохранилась, возможна повторная
+доставка; потребитель отсекает её по тому же `event_id`.
 
 ## Проверка модуля
 
