@@ -19,6 +19,3 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["helpdesk_notification"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"helpdesk_notification/templates" = "helpdesk_notification/templates"
