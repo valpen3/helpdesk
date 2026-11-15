@@ -62,7 +62,7 @@ def test_connection_uses_confirms_and_closes_after_caller_error():
         async with open_publisher(host="rabbitmq", login="user", password="test"):
             raise ValueError("caller failed")
 
-    with patch("app.messaging.publisher.aio_pika.connect_robust", return_value=connection):
+    with patch("app.messaging.publisher.connect_broker", return_value=connection):
         with pytest.raises(ValueError, match="caller failed"):
             asyncio.run(scenario())
     connection.channel.assert_awaited_once_with(publisher_confirms=True, on_return_raises=True)
@@ -79,7 +79,7 @@ def test_connection_is_closed_when_channel_setup_fails():
         async with open_publisher(host="rabbitmq", login="user", password="test"):
             pytest.fail("failed setup must not yield a publisher")
 
-    with patch("app.messaging.publisher.aio_pika.connect_robust", return_value=connection):
+    with patch("app.messaging.publisher.connect_broker", return_value=connection):
         with pytest.raises(ConnectionError, match="channel failed"):
             asyncio.run(scenario())
     connection.close.assert_awaited_once()

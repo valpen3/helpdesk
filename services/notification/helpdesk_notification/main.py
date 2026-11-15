@@ -2,9 +2,10 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
-from redis.asyncio import Redis
 
 from helpdesk_common import RequestIdMiddleware, make_health_router, setup_logging
+from helpdesk_common.metrics import instrument_app
+from helpdesk_common.redis_client import make_redis_client
 from helpdesk_notification.config import Settings
 from helpdesk_notification.consumer import Consumer
 from helpdesk_notification.idempotency import DeliveryRegistry
@@ -13,7 +14,7 @@ from helpdesk_notification.mailer import Mailer
 settings = Settings()
 setup_logging("notification-service", settings.log_level)
 mailer = Mailer(settings)
-redis = Redis(
+redis = make_redis_client(
     host=settings.redis_host,
     port=settings.redis_port,
     username=settings.redis_user,
@@ -61,3 +62,6 @@ app.include_router(
         timeout=settings.io_timeout + 1,
     )
 )
+
+
+instrument_app(app)

@@ -18,9 +18,11 @@ jobs:
       - name: Lint
         run: ruff check .
       - name: Test
-        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests
+        run: pytest -q libs/common/tests services/ticket/tests services/notification/tests services/sla/tests scripts/tests
 
   compose:
+    env:
+      COMPOSE_PROJECT_NAME: helpdesk-ha-ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -108,9 +110,27 @@ jobs:
               PYTHONPATH=/workspace/services/ticket:/workspace/libs/common \
               pytest -p no:cacheprovider -q libs/common/tests services/ticket/tests
             '
+      - name: Validate monitoring configuration
+        run: |
+          docker compose --profile monitoring run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+          docker compose --profile monitoring run --rm --no-deps --entrypoint promtool -v "$PWD/infra/prometheus:/rules:ro" -w /rules prometheus test rules alerts.test.yml
+          docker compose --profile monitoring run --rm --no-deps --entrypoint amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
+      - name: Start monitoring and check collected data
+        run: |
+          docker compose --profile monitoring up -d
+          python scripts/check_monitoring.py
+      - name: Measure Redis and RabbitMQ failover with long-lived clients
+        run: python scripts/failure_scenario.py --cycles 2
+      - name: Upload measured failure journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha-failure-results
+          path: artifacts/ha-results/
+          if-no-files-found: ignore
       - name: Container logs on failure
         if: failure()
-        run: docker compose logs --no-color --tail=100
+        run: docker compose --profile monitoring logs --no-color --tail=100
       - name: Annotate auth startup logs
         if: failure()
         run: |
@@ -120,4 +140,4 @@ jobs:
           printf '::error title=Auth startup log tail::%s\n' "$logs"
       - name: Stop test stack
         if: always()
-        run: docker compose down
+        run: docker compose --profile monitoring down

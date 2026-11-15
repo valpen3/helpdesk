@@ -1,0 +1,167 @@
+{
+  "uid": "helpdesk-overview",
+  "title": "HelpDesk ? service overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Readiness",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "probe_success{job=\"readiness\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Requests / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(http_requests_total[2m]))",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HTTP p95 latency",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le, instance) (rate(http_request_duration_seconds_bucket[2m])))",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "5xx / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (rate(http_requests_total{status=~\"5..\"}[2m]))",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Nginx active connections",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nginx_connections_active",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "PostgreSQL connections",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pg_stat_database_numbackends",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Active alerts",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "legendFormat": "{{instance}} {{queue}}"
+        }
+      ]
+    }
+  ]
+}

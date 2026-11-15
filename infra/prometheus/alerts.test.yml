@@ -1,0 +1,29 @@
+rule_files:
+  - alerts.yml
+evaluation_interval: 5s
+tests:
+  - interval: 5s
+    input_series:
+      - series: 'redis_up{job="redis",instance="redis"}'
+        values: '1 0 0 0 0 0 0 0'
+      - series: 'probe_success{job="readiness",instance="http://auth-service:8000/health/ready"}'
+        values: '1 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 25s
+        alertname: RedisNodeDown
+        exp_alerts:
+          - exp_labels:
+              job: redis
+              instance: redis
+              severity: warning
+            exp_annotations:
+              summary: Redis node redis is down
+      - eval_time: 25s
+        alertname: ServiceNotReady
+        exp_alerts:
+          - exp_labels:
+              job: readiness
+              instance: http://auth-service:8000/health/ready
+              severity: critical
+            exp_annotations:
+              summary: Readiness failed for http://auth-service:8000/health/ready

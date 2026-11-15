@@ -55,6 +55,26 @@ iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.80 -p tcp --dport 8000 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.90 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.90 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEPT
 iptables -w -A "$chain" -s 10.10.6.2 -d 10.10.6.90 -p tcp --dport 8000 -j ACCEPT
+# HA peers may resolve each other through mon-net instead of broker-net.
+for source in 10.10.6.50 10.10.6.51 10.10.6.52; do
+  for destination in 10.10.6.50 10.10.6.51 10.10.6.52; do
+    iptables -w -A "$chain" -s "$source" -d "$destination" -p tcp \
+      -m multiport --dports 4369,25672 -j ACCEPT
+  done
+done
+for source in 10.10.6.20 10.10.6.60 10.10.6.80; do
+  for destination in 10.10.6.51 10.10.6.52; do
+    iptables -w -A "$chain" -s "$source" -d "$destination" -p tcp --dport 5672 -j ACCEPT
+  done
+done
+iptables -w -A "$chain" -s 10.10.6.13 -d 10.10.6.40 -p tcp --dport 6379 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.15 -d 10.10.6.30 -p tcp --dport 5432 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.16 -d 10.10.6.2 -p tcp --dport 80 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.12 -d 10.10.6.10 -p tcp --dport 9090 -j ACCEPT
+iptables -w -A "$chain" -s 10.10.6.17 -d 10.10.6.2 -p tcp --dport 80 -j ACCEPT
+for destination in 10.10.6.20 10.10.6.60 10.10.6.80 10.10.6.90; do
+  iptables -w -A "$chain" -s 10.10.6.17 -d "$destination" -p tcp --dport 8000 -j ACCEPT
+done
 iptables -w -A "$chain" -s "$mon_cidr" -d "$mon_cidr" \
   -m limit --limit 5/min --limit-burst 10 \
   -j LOG --log-prefix "HELPDESK-MON-DROP " --log-level 4

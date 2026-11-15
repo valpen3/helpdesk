@@ -10,13 +10,14 @@ from redis.exceptions import RedisError
 from app.config import settings
 from app.schemas import Profile
 from helpdesk_common import get_logger
+from helpdesk_common.redis_client import make_redis_client
 
 log = get_logger(__name__)
 PROFILE_TTL = 300
 
 
 def make_redis() -> Redis:
-    return Redis(
+    return make_redis_client(
         host=settings.redis_host,
         port=settings.redis_port,
         username=settings.redis_user,

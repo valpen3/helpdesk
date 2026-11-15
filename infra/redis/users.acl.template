@@ -3,3 +3,5 @@ user auth-svc on #__AUTH_REDIS_PASSWORD_HASH__ ~auth:* +@all -@dangerous
 user ticket-svc on #__TICKET_REDIS_PASSWORD_HASH__ ~ticket:* ~tickets:* ~stats:* ~rate:* +@all -@dangerous
 user notif-svc on #__NOTIF_REDIS_PASSWORD_HASH__ ~notif:* +@all -@dangerous
 user exporter on #__EXPORTER_REDIS_PASSWORD_HASH__ +info +ping +config|get +client|list
+user replication on #__REDIS_REPLICATION_PASSWORD_HASH__ +psync +replconf +ping
+user sentinel on #__REDIS_SENTINEL_PASSWORD_HASH__ allchannels +multi +slaveof +ping +exec +subscribe +config|rewrite +role +publish +info +client|setname +client|kill +script|kill

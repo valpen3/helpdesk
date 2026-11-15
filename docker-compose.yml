@@ -21,6 +21,9 @@ services:
       DB_NAME: auth_db
       DB_USER: auth_user
       DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in .env}
+      REDIS_SENTINELS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      REDIS_MASTER_NAME: helpdesk
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_USER: auth-svc
@@ -45,7 +48,11 @@ services:
     depends_on:
       auth-migrate:
         condition: service_completed_successfully
-      redis:
+      sentinel-1:
+        condition: service_healthy
+      sentinel-2:
+        condition: service_healthy
+      sentinel-3:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
@@ -86,12 +93,16 @@ services:
       DB_NAME: tickets_db
       DB_USER: tickets_user
       DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
+      REDIS_SENTINELS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      REDIS_MASTER_NAME: helpdesk
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_USER: ticket-svc
       REDIS_PASSWORD: ${TICKET_REDIS_PASSWORD:?Set TICKET_REDIS_PASSWORD in .env}
       CACHE_ENABLED: ${CACHE_ENABLED:-true}
       CACHE_TIMEOUT: ${CACHE_TIMEOUT:-0.25}
+      MQ_HOSTS: rabbitmq,rabbitmq-2,rabbitmq-3
       MQ_HOST: rabbitmq
       MQ_PORT: "5672"
       MQ_USER: ticket-svc
@@ -111,11 +122,14 @@ services:
         condition: service_healthy
       ticket-migrate:
         condition: service_completed_successfully
-      redis:
+      sentinel-1:
         condition: service_healthy
-      rabbitmq:
+      sentinel-2:
         condition: service_healthy
-        restart: true
+      sentinel-3:
+        condition: service_healthy
+      rabbitmq-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
       interval: 10s
@@ -154,6 +168,7 @@ services:
       mon-net:
         ipv4_address: 10.10.6.30
     environment:
+      EXPORTER_DB_PASSWORD: ${EXPORTER_DB_PASSWORD:?Set EXPORTER_DB_PASSWORD in .env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?задайте AUTH_DB_PASSWORD в .env}
       TICKETS_DB_PASSWORD: ${TICKETS_DB_PASSWORD:?задайте TICKETS_DB_PASSWORD в .env}
@@ -195,10 +210,13 @@ services:
       retries: 5
       start_period: 10s
 
-  redis:
+  redis: &redis-node
     image: redis:7-alpine
     command: ["sh", "/usr/local/bin/start-redis.sh"]
-    environment:
+    environment: &redis-environment
+      REDIS_NODE_HOSTNAME: redis
+      REDIS_REPLICATION_PASSWORD: ${REDIS_REPLICATION_PASSWORD:?Set REDIS_REPLICATION_PASSWORD in .env}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
       AUTH_REDIS_PASSWORD: ${AUTH_REDIS_PASSWORD:?Set AUTH_REDIS_PASSWORD in .env}
       TICKET_REDIS_PASSWORD: ${TICKET_REDIS_PASSWORD:?Set TICKET_REDIS_PASSWORD in .env}
       NOTIF_REDIS_PASSWORD: ${NOTIF_REDIS_PASSWORD:?Set NOTIF_REDIS_PASSWORD in .env}
@@ -220,13 +238,15 @@ services:
       retries: 5
       start_period: 10s
 
-  rabbitmq:
+  rabbitmq: &rabbit-node
     image: rabbitmq:3.13-management
     entrypoint: ["sh", "/etc/rabbitmq/start.sh"]
     command: ["rabbitmq-server"]
     hostname: rabbitmq
     restart: unless-stopped
-    environment:
+    environment: &rabbit-environment
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?Set RABBITMQ_ERLANG_COOKIE in .env}
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2"
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_ADMIN_PASSWORD:?Set RABBITMQ_ADMIN_PASSWORD in .env}
       NOTIF_MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
@@ -235,6 +255,7 @@ services:
       NOTIF_RETRY_DELAY_MS: ${NOTIF_RETRY_DELAY_MS:-30000}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
       - ./infra/rabbitmq/start.sh:/etc/rabbitmq/start.sh:ro
@@ -258,6 +279,7 @@ services:
       dockerfile: services/notification/Dockerfile
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      MQ_HOSTS: rabbitmq,rabbitmq-2,rabbitmq-3
       MQ_HOST: rabbitmq
       MQ_USER: notif-svc
       MQ_PASSWORD: ${NOTIF_MQ_PASSWORD:?Set NOTIF_MQ_PASSWORD in .env}
@@ -266,6 +288,9 @@ services:
       MAIL_FROM: ${MAIL_FROM:-helpdesk@example.com}
       ONCALL_EMAIL: ${ONCALL_EMAIL:?Set ONCALL_EMAIL in .env}
       ADMIN_NOTIFY_EMAIL: ${ADMIN_NOTIFY_EMAIL:?Set ADMIN_NOTIFY_EMAIL in .env}
+      REDIS_SENTINELS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      REDIS_MASTER_NAME: helpdesk
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_USER: notif-svc
@@ -280,12 +305,15 @@ services:
       mon-net:
         ipv4_address: 10.10.6.60
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-        restart: true
+      rabbitmq-bootstrap:
+        condition: service_completed_successfully
       mailpit:
         condition: service_healthy
-      redis:
+      sentinel-1:
+        condition: service_healthy
+      sentinel-2:
+        condition: service_healthy
+      sentinel-3:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=12)"]
@@ -324,6 +352,7 @@ services:
       DB_NAME: sla_db
       DB_USER: sla_user
       DB_PASSWORD: ${SLA_DB_PASSWORD:?Set SLA_DB_PASSWORD in .env}
+      MQ_HOSTS: rabbitmq,rabbitmq-2,rabbitmq-3
       MQ_HOST: rabbitmq
       MQ_PORT: "5672"
       MQ_USER: sla-svc
@@ -346,9 +375,8 @@ services:
         condition: service_healthy
       sla-migrate:
         condition: service_completed_successfully
-      rabbitmq:
-        condition: service_healthy
-        restart: true
+      rabbitmq-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=8)"]
       interval: 10s
@@ -377,10 +405,290 @@ services:
     restart: "no"
     logging: *default-logging
 
+  redis-replica-1:
+    <<: *redis-node
+    environment:
+      <<: *redis-environment
+      REDIS_REPLICA_OF: redis
+      REDIS_NODE_HOSTNAME: redis-replica-1
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/users.acl.template:/usr/local/etc/redis/users.acl.template:ro
+      - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
+      - redis-replica-1-data:/data
+    networks:
+      cache-net: {}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis-replica-2:
+    <<: *redis-node
+    environment:
+      <<: *redis-environment
+      REDIS_REPLICA_OF: redis
+      REDIS_NODE_HOSTNAME: redis-replica-2
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./infra/redis/users.acl.template:/usr/local/etc/redis/users.acl.template:ro
+      - ./infra/redis/start.sh:/usr/local/bin/start-redis.sh:ro
+      - redis-replica-2-data:/data
+    networks:
+      cache-net: {}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  sentinel-1:
+    image: redis:7-alpine
+    command: ["sh", "/usr/local/bin/sentinel.sh"]
+    environment:
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      SENTINEL_HOSTNAME: sentinel-1
+    volumes:
+      - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
+      - sentinel-1-data:/data
+    networks:
+      cache-net: {}
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_SENTINEL_PASSWORD redis-cli -p 26379 SENTINEL ckquorum helpdesk | grep '^OK'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  sentinel-2:
+    image: redis:7-alpine
+    command: ["sh", "/usr/local/bin/sentinel.sh"]
+    environment:
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      SENTINEL_HOSTNAME: sentinel-2
+    volumes:
+      - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
+      - sentinel-2-data:/data
+    networks:
+      cache-net: {}
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_SENTINEL_PASSWORD redis-cli -p 26379 SENTINEL ckquorum helpdesk | grep '^OK'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  sentinel-3:
+    image: redis:7-alpine
+    command: ["sh", "/usr/local/bin/sentinel.sh"]
+    environment:
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+      SENTINEL_HOSTNAME: sentinel-3
+    volumes:
+      - ./infra/redis/sentinel.sh:/usr/local/bin/sentinel.sh:ro
+      - sentinel-3-data:/data
+    networks:
+      cache-net: {}
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-replica-1:
+        condition: service_healthy
+      redis-replica-2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_SENTINEL_PASSWORD redis-cli -p 26379 SENTINEL ckquorum helpdesk | grep '^OK'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  rabbitmq-2:
+    <<: *rabbit-node
+    hostname: rabbitmq-2
+    ports: []
+    volumes:
+      - rabbitmq-2-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./infra/rabbitmq/start.sh:/etc/rabbitmq/start.sh:ro
+    networks:
+      broker-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.51
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq-3:
+    <<: *rabbit-node
+    hostname: rabbitmq-3
+    ports: []
+    volumes:
+      - rabbitmq-3-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./infra/rabbitmq/start.sh:/etc/rabbitmq/start.sh:ro
+    networks:
+      broker-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.52
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  rabbitmq-bootstrap:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq-bootstrap
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:?Set RABBITMQ_ERLANG_COOKIE in .env}
+      RABBITMQ_CTL_ERL_ARGS: "+S 1:1"
+    entrypoint: ["sh", "/bootstrap-cluster.sh"]
+    volumes:
+      - ./infra/rabbitmq/bootstrap-cluster.sh:/bootstrap-cluster.sh:ro
+    networks:
+      broker-net: {}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      rabbitmq-2:
+        condition: service_healthy
+      rabbitmq-3:
+        condition: service_healthy
+    restart: "no"
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      mon-net:
+        ipv4_address: 10.10.6.10
+      admin-net: {}
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [monitoring]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./infra/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      mon-net:
+        ipv4_address: 10.10.6.11
+      admin-net: {}
+    ports: ["127.0.0.1:9093:9093"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      mon-net:
+        ipv4_address: 10.10.6.12
+      admin-net: {}
+    ports: ["127.0.0.1:3000:3000"]
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    profiles: [monitoring]
+    environment:
+      REDIS_ADDR: ""
+      REDIS_USER: exporter
+      REDIS_PASSWORD: ${EXPORTER_REDIS_PASSWORD:?Set EXPORTER_REDIS_PASSWORD in .env}
+    networks:
+      cache-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.13
+    restart: unless-stopped
+
+  sentinel-exporter:
+    image: oliver006/redis_exporter:v1.67.0
+    profiles: [monitoring]
+    environment:
+      REDIS_ADDR: ""
+      REDIS_PASSWORD: ${REDIS_SENTINEL_PASSWORD:?Set REDIS_SENTINEL_PASSWORD in .env}
+    networks:
+      cache-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.14
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    profiles: [monitoring]
+    environment:
+      DATA_SOURCE_URI: postgres-db:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: metrics
+      DATA_SOURCE_PASS: ${EXPORTER_DB_PASSWORD:?Set EXPORTER_DB_PASSWORD in .env}
+    networks:
+      db-net: {}
+      mon-net:
+        ipv4_address: 10.10.6.15
+    restart: unless-stopped
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4.1
+    profiles: [monitoring]
+    command: ["--nginx.scrape-uri=http://gateway/nginx_status"]
+    networks:
+      mon-net:
+        ipv4_address: 10.10.6.16
+    restart: unless-stopped
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.26.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./infra/prometheus/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    networks:
+      mon-net:
+        ipv4_address: 10.10.6.17
+    restart: unless-stopped
+
 volumes:
   pg_data:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
   redis-data:
   rabbitmq-data:
+  redis-replica-1-data:
+  redis-replica-2-data:
+  sentinel-1-data:
+  sentinel-2-data:
+  sentinel-3-data:
+  rabbitmq-2-data:
+  rabbitmq-3-data:
 
 secrets:
   jwt_private:
