@@ -331,6 +331,10 @@ services:
       MQ_VHOST: /
       SLA_TIME_SCALE: ${SLA_TIME_SCALE:-1}
       SLA_CHECK_INTERVAL: ${SLA_CHECK_INTERVAL:-30}
+      JWT_PUBLIC_KEY_PATH: /run/secrets/jwt_public.pem
+    secrets:
+      - source: jwt_public
+        target: jwt_public.pem
     networks:
       edge: {}
       db-net: {}

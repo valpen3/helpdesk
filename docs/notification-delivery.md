@@ -53,8 +53,7 @@ deduplication TTL are in `.env.example`.
 ## Gateway
 
 Nginx proxies `/api/v1/auth/...` and `/api/v1/users...` to `auth-service`,
-and `/api/v1/sla...` to `sla-service`. Before proxying SLA requests, Nginx
-checks the bearer access token with `auth-service`. Fine-grained role checks
-remain the responsibility of the SLA API.
+and `/api/v1/sla...` to `sla-service`. SLA endpoints verify bearer access
+tokens locally with auth-service's public key.
 Nginx also applies per-IP login and ticket-creation limits, a connection limit,
 and common response-security headers.
