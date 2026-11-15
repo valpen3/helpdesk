@@ -44,6 +44,8 @@ jobs:
         run: |
           docker compose exec -T ticket-service alembic current
           docker compose exec -T ticket-service alembic check
+      - name: Start auth service
+        run: docker compose up -d --wait auth-service
       - name: Start gateway
         run: docker compose up -d --wait gateway
       - name: Check gateway ticket routes
